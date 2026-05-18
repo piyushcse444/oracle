@@ -1,0 +1,21 @@
+"Power Query – Bank API Training",,
+,,
+"Offline Training Kit – Restricted / Air-Gapped Environments",,
+,,
+,,
+Exercise,Description,"Skill Covered"
+"Ex 1 – Customer KYC","Parse CustomerKYC.json → clean table","Json.Document, expand records"
+"Ex 2 – Transactions (3 pages)","Combine Page1-3 JSON → full ledger","List.Combine, pagination logic"
+"Ex 3 – Loan EMI Schedule","Nested JSON → applicant + EMI table","Nested expand, Table.AddColumn"
+"Ex 4 – Forex XML Feed","Parse ForexRates.xml → rate comparison","Xml.Document, record drill-down"
+"Ex 5 – Branch Directory","Load BranchList.json → zone summary pivot","Group By, aggregation"
+"Ex 6 – Auth Headers (mock)","Add API-Key / Bearer header to Web.Contents","Web.Contents options record"
+"Ex 7 – Error Handling","Wrap API calls in try…otherwise","Error resilience patterns"
+"Ex 8 – Dynamic Parameters","Build URL from PQ Parameters","Text.Combine, query strings"
+,,
+Instructions:,,
+"1. Save all .json and .xml files to C:\BankTraining\ on your local machine",,
+"2. In Power Query: Home → New Source → Blank Query → Advanced Editor",,
+"3. Paste the M code from each exercise sheet into Advanced Editor",,
+"4. Update the file path in File.Contents() to match your local folder",,
+"5. When connected to internal APIs later, swap File.Contents() with Web.Contents()",,

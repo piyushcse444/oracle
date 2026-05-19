@@ -1,0 +1,177 @@
+================================================================================
+          ORACLE 19c DATABASE IN KALI LINUX: DOCKER DEPLOYMENT GUIDE
+================================================================================
+
+[ ARCHITECTURE OVERVIEW ]
+-------------------------
+* Host OS: Kali Linux (Debian-based)
+* Container Sandbox: Docker Engine (Provides isolation, prevents system breakdown)
+* Database Architecture: Multitenant Architecture
+  - CDB (Container Database Root)  = Name: "XE"      (For System Admin tasks)
+  - PDB (Pluggable Database Schema) = Name: "XEPDB1"  (For Student Assignments)
+
+
+================================================================================
+PART 1: DOCKER CORE SERVICE DEPLOYMENT
+================================================================================
+
+STEP 1: UPDATE REPOSITORIES & INSTALL ENGINE
+--------------------------------------------
+Command:
+$ sudo apt update && sudo apt install -y docker.io
+
+Explanation:
+* "sudo"       : Elevates terminal security rights to install software packages.
+* "apt update" : Synchronizes your Kali system package indexing files with the 
+                 online servers to pull down latest security releases.
+* "install -y" : Downloads and automatically confirms the installation of the 
+                 Docker engine package without halting to ask for permission.
+
+
+STEP 2: ENERGIZE THE BACKGROUND CONTAINER DAEMON
+------------------------------------------------
+Command:
+$ sudo systemctl enable docker --now
+
+Explanation:
+* "systemctl" : The core management system control center utility for Linux.
+* "enable"    : Tells Kali to automatically boot up Docker every single time 
+                the computer or laptop powers on from a complete shutdown.
+* "--now"     : Instantly turns the engine service on right this millisecond 
+                so you don't have to restart your machine to use it.
+
+
+================================================================================
+PART 2: INSTANCE INITIALIZATION & LOG MONITORING
+================================================================================
+
+STEP 3: DEPLOY THE MULTITENANT ORACLE 19c WORKSPACE
+---------------------------------------------------
+Command:
+$ sudo docker run -d --name oracle19c -p 1521:1521 -p 5500:5500 -e ORACLE_PASSWORD='YourStrongPassword123!' gvenzl/oracle-xe
+
+Explanation:
+* "docker run"        : Commands Docker to construct a brand new container.
+* "-d"                : Detached Mode. Runs the database silently in the background 
+                        so your terminal remains open and free for other code.
+* "--name oracle19c"  : Assigns a clean nickname to the container so you don't 
+                        have to memorize its random hexadecimal system ID.
+* "-p 1521:1521"      : Network Port Mapping. Maps Kali's port 1521 to Oracle's 
+                        internal database communication listener socket.
+* "-p 5500:5500"      : Enterprise Manager port mapping for web portal layouts.
+* "-e ORACLE_PASSWORD": Inject Environment Variable. Sets the master storage pass 
+                        for the database root administrator accounts (SYS/SYSTEM).
+* "gvenzl/oracle-xe"  : The official pre-configured Oracle Express image asset.
+
+
+STEP 4: TRACK LOGS FOR STARTUP COMPLETION
+-----------------------------------------
+Command:
+$ sudo docker logs -f oracle19c
+
+Explanation:
+* "logs" : Captures and displays the screen outputs generated inside the engine.
+* "-f"   : Follow mode. Streams live, real-time lines to the terminal screen.
+* NOTE   : Oracle takes 2-3 minutes to construct system database blocks. Look for 
+           the confirmation "DATABASE IS READY TO USE" before typing queries. 
+           Press [Ctrl + C] to exit the log screen safely without stopping the database.
+
+
+STEP 5: EMERGENCY PURGE COMMAND (FOR RESETTING SESSIONS)
+--------------------------------------------------------
+Command:
+$ sudo docker rm -f oracle19c
+
+Explanation:
+* "rm" : Removes a container from system cache.
+* "-f" : Force execution. Stops the database immediately even if it is currently 
+         running or locked up, giving you a completely clean slate to rerun Step 3.
+
+
+================================================================================
+PART 3: SCHEMA CONFIGURATION (ADMIN PLATFORM)
+================================================================================
+
+STEP 6: ACCESS THE MASTER ADMINISTRATION PROMPT (SYSDBA)
+--------------------------------------------------------
+Command:
+$ sudo docker exec -it oracle19c sqlplus 'sys/YourStrongPassword123! as sysdba'
+
+Explanation:
+* "docker exec" : Jumps inside the container sandbox to run internal applications.
+* "-it"         : Interactive TTY. Connects your keyboard typing directly inside 
+                  the virtual engine so you can run queries dynamically.
+* "sqlplus"     : Launches Oracle's native database interface terminal shell.
+* 'sys/... as sysdba' : Authenticates you as the ultimate root system admin. 
+                       Single quotes (' ') protect the special mark (!) from Zsh.
+
+
+STEP 7: CODE STATEMENTS INSIDE THE INTERACTIVE SHELL (SQL> Prompt)
+------------------------------------------------------------------
+Run these queries sequentially to create your assignment environment:
+
+1] ALTER SESSION SET "_ORACLE_SCRIPT"=true;
+   -> Why: Modern Oracle (CDB mode) blocks simple user creation by default. This 
+      tells the system to bypass naming locks for local assignment schemas.
+
+2] CREATE USER test IDENTIFIED BY "test@123";
+   -> Why: Creates an isolated schema workspace folder.
+   -> CRITICAL RULE: If a password contains a special character like '@', it MUST 
+      be enclosed in Double Quotes (" ") inside SQL, otherwise Oracle fails with 
+      syntax error ORA-00922.
+
+3] GRANT CONNECT, RESOURCE, DBA TO test;
+   -> Why: Assigns operational privileges. CONNECT lets you log in, RESOURCE lets 
+      you run DDL (CREATE TABLE), and DBA provides assignment flexibility.
+
+4] SELECT username, account_status, created FROM dba_users WHERE oracle_maintained = 'N' ORDER BY created DESC;
+   -> Why: Queries the core database registry view. "oracle_maintained = 'N'" hides 
+      the dozens of default system accounts, showing only human-created profiles.
+
+5] EXIT;
+   -> Why: Safely closes your connection socket and brings you back to Kali Linux.
+
+
+================================================================================
+PART 4: EXTERNAL DATA INJECTION & EXERCISE BUILDING
+================================================================================
+
+STEP 8: FILE TRANSFUSION FROM KALI TO THE CONTAINERS FILESPACE
+--------------------------------------------------------------
+Command:
+$ sudo docker cp /home/kali/Desktop/Oracle/exercise/setup_dummy_data.sql oracle19c:/tmp/setup_dummy_data.sql
+
+Explanation:
+* "cp" : Copy function wrapper. Copies your exercise script from your local 
+         Kali desktop storage path directly into the internal temporary folder 
+         (/tmp) inside the container sandbox environment.
+
+
+STEP 9: AUTOMATED HIGH-VELOCITY REPO EXTRACTION INTO THE PLUGGABLE SYSTEM
+-------------------------------------------------------------------------
+Command:
+$ sudo docker exec -it oracle19c sqlplus 'test/"test@123"@localhost:1521/XEPDB1' @/tmp/setup_dummy_data.sql
+
+Explanation:
+* 'test/"test@123"...' : Connects as your custom student account.
+* "@localhost:1521/"   : Routes traffic natively through local machine ports.
+* "XEPDB1"             : THE MOST IMPORTANT PART. Connects you straight to the 
+                         Pluggable Database. Connecting to "XE" will fail because 
+                         user assignment tables must live in the pluggable shell.
+* "@"                  : The execution operator. Instantly runs all commands 
+                         inside setup_dummy_data.sql automatically line-by-line.
+
+
+================================================================================
+              DAILY WORKSPACE LIFECYCLE MANAGEMENT COMMANDS
+================================================================================
+* Turn DB off when done to save laptop battery/RAM:
+  $ sudo docker stop oracle19c
+
+* Turn DB back on when starting a new study session:
+  $ sudo docker start oracle19c
+
+* Jump straight into your workspace to write homework queries:
+  $ sudo docker exec -it oracle19c sqlplus 'test/"test@123"@localhost:1521/XEPDB1'
+================================================================================
+

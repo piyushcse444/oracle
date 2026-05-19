@@ -1,0 +1,88 @@
+================================================================================
+                    ORACLE DATABASE: V$ VIRTUAL VIEWS
+================================================================================
+
+[ DEFINITION ]
+--------------
+* V$ Views (Virtual / Dynamic Performance Views) are live, read-only system 
+  tables in Oracle Database.
+* They provide a direct window into the database's active memory (RAM).
+* Data is highly volatile: it changes every millisecond and resets completely 
+  whenever the database/Docker container restarts.
+
+* NOTE: You must be logged in as an administrator (SYS or DBA) to read them.
+
+
+================================================================================
+1. V$DATABASE  --> Focus: Physical Structures & Storage State
+================================================================================
+Queries the physical control files to check global configurations.
+
+* Key Columns:
+  - NAME            : The global name of the database container (e.g., XE).
+  - OPEN_MODE       : Operational state (READ WRITE, READ ONLY, MOUNTED).
+  - LOG_MODE        : Backup tracking status (ARCHIVELOG / NOARCHIVELOG).
+  - PLATFORM_NAME   : The hosting OS architecture (e.g., Linux x86 64-bit).
+
+* Quick SQL:
+  SELECT name, open_mode, log_mode, platform_name FROM v$database;
+
+
+================================================================================
+2. V$INSTANCE  --> Focus: Memory Engine Uptime & Process State
+================================================================================
+Monitors the active software processes currently executing in your system RAM.
+
+* Key Columns:
+  - INSTANCE_NAME   : The System Identifier (SID) of the active memory process.
+  - HOST_NAME       : The network name of the computer hosting the engine.
+  - VERSION         : The base release version string of the software.
+  - STARTUP_TIME    : Exact timestamp showing when the database was turned on.
+  - STATUS          : Operating lifecycle state (OPEN, CLOSED, STARTED).
+
+* Quick SQL:
+  SELECT instance_name, host_name, startup_time, status FROM v$instance;
+
+
+================================================================================
+3. V$SESSION   --> Focus: Live Connections & User Activity Audit
+================================================================================
+Tracks every human user connection and background system task right now.
+
+* Key Columns:
+  - SID / SERIAL#   : Unique IDs used to identify or terminate a stuck connection.
+  - USERNAME        : The login account name (e.g., SYS, TEST_USER).
+  - STATUS          : Activity state (ACTIVE = running a query, INACTIVE).
+  - PROGRAM         : The software tools being used (e.g., sqlplus, python3).
+  - OSUSER          : The desktop username on the client computer (e.g., kali).
+
+* Quick SQL:
+  SELECT sid, serial#, username, status, program, osuser 
+  FROM v$session 
+  WHERE username IS NOT NULL;
+
+
+================================================================================
+4. V$VERSION   --> Focus: Software Environment & Architecture
+================================================================================
+Provides a clear, line-by-line inventory of components and patches.
+
+* Key Columns:
+  - BANNER          : Complete product details, bit-architecture, and versions.
+
+* Quick SQL:
+  SELECT banner FROM v$version;
+
+
+================================================================================
+             PRO-TIP: RECONCILING COMPONENT ERRORS (ORA-00904)
+================================================================================
+* Single Quotes (' ') : Used around values, texts, and string lookups.
+  Example: ... WHERE status = 'OPEN';
+  
+* Double Quotes (" ") : Reserved ONLY for naming database columns, tables, 
+                        or user accounts containing special characters.
+  Example: CREATE USER cse_user IDENTIFIED BY "StudentPass123!";
+
+================================================================================
+

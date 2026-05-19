@@ -2,12 +2,7 @@
          ORACLE DATABASE — COMPLETE SQL NOTES  (DDL + DML + SYSTEM VIEWS)
                      Designed for Notepad  |  Font: Courier New
 ================================================================================
-  HOW TO USE THIS FILE IN NOTEPAD:
-  > Open Notepad
-  > Format menu --> uncheck Word Wrap
-  > Change font to Courier New, Size 10 for best alignment
-================================================================================
- 
+  
   SEQUENCE TO FOLLOW:
   STEP 1  -->  Know Your Database       (V$ Views)
   STEP 2  -->  Explore Schemas / Users  (DBA_USERS)
@@ -18,7 +13,7 @@
   STEP 7  -->  Transaction Control      (COMMIT, ROLLBACK, SAVEPOINT)
  
 ================================================================================
-  STEP 1 -- KNOW YOUR DATABASE
+  STEP 1 -- KNOW YOUR DATABASE -> sys user required
 ================================================================================
  
   Before anything else -- confirm WHICH database you are in,
@@ -28,7 +23,7 @@
   1A. CHECK DATABASE NAME, MODE AND PLATFORM
   ------------------------------------------------------------------------
  
-  SELECT name, open_mode, log_mode, platform_name
+  SELECT name, open_mode, log_mode, platform_name 
   FROM   v$database;
  
   Column         Meaning

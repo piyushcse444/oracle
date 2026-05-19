@@ -1,0 +1,122 @@
+================================================================================
+         ORACLE PRIVILEGES: CONNECT, RESOURCE & UNLIMITED TABLESPACE
+================================================================================
+
+[ BACKGROUND: HOW ORACLE PERMISSIONS WORK ]
+--------------------------------------------------------------------------------
+* A freshly created user in Oracle is like a person with NO ID card —
+  they literally cannot do anything, not even log in.
+* Privileges are granted in two layers:
+    SYSTEM PRIVILEGES  --> what actions you can perform (create, connect, drop)
+    OBJECT PRIVILEGES  --> which specific tables/views you can access
+* ROLES are just bundles of pre-packaged system privileges given a single name.
+================================================================================
+1. CONNECT  --> Role: "You are allowed to enter the building"
+================================================================================
+* CONNECT is a ROLE (a named bundle of privileges), not a single permission.
+* Historically (Oracle 9i and older) it contained 8 privileges, but Oracle
+  stripped it down to just ONE privilege in Oracle 10g onwards:
+
+  +-------------------------+------------------------------------------+
+  |  Privilege Inside ROLE  |  What It Means                           |
+  +-------------------------+------------------------------------------+
+  |  CREATE SESSION         |  User can physically log into the DB     |
+  +-------------------------+------------------------------------------+
+
+* Without CONNECT (or CREATE SESSION), the user hits a wall immediately:
+    ERROR: ORA-01045: user lacks CREATE SESSION privilege; logon denied
+
+* Think of it as:  CONNECT = the front door key to Oracle.
+
+* Quick Check — what's inside the CONNECT role:
+  SELECT privilege FROM dba_sys_privs WHERE grantee = 'CONNECT';
+  -- Output: CREATE SESSION
+
+================================================================================
+2. RESOURCE  --> Role: "You are allowed to build things inside the building"
+================================================================================
+* RESOURCE is also a ROLE — it bundles the core DDL (Data Definition Language)
+  privileges a developer needs to actually build database objects.
+
+* What RESOURCE contains:
+  +---------------------------+------------------------------------------------+
+  |  Privilege Inside ROLE    |  What It Lets You Do                           |
+  +---------------------------+------------------------------------------------+
+  |  CREATE TABLE             |  Build regular data tables                     |
+  |  CREATE SEQUENCE          |  Generate auto-increment number series         |
+  |  CREATE TRIGGER           |  Attach automatic actions to table events      |
+  |  CREATE PROCEDURE         |  Write stored PL/SQL logic blocks              |
+  |  CREATE TYPE              |  Define custom object/collection data types    |
+  |  CREATE CLUSTER           |  Group related tables physically together      |
+  |  CREATE INDEXTYPE         |  Build custom index type definitions           |
+  |  CREATE OPERATOR          |  Define custom SQL operators                   |
+  +---------------------------+------------------------------------------------+
+
+* Quick Check — what's inside the RESOURCE role:
+  SELECT privilege FROM dba_sys_privs WHERE grantee = 'RESOURCE';
+
+* IMPORTANT TRAP:
+  RESOURCE does NOT grant CREATE VIEW or CREATE SYNONYM.
+  If your user needs views, grant separately:
+    GRANT CREATE VIEW, CREATE SYNONYM TO pdb_admin;
+
+================================================================================
+3. UNLIMITED TABLESPACE  --> "You have no storage cap inside the building"
+================================================================================
+* This is a pure SYSTEM PRIVILEGE (not a role).
+* A tablespace is Oracle's physical storage container — the actual disk space
+  where your table data gets written.
+
+* Without this privilege, even with CONNECT + RESOURCE, table creation fails:
+    ERROR: ORA-01950: no privileges on tablespace 'USERS'
+  Because the user has 0 MB quota assigned to any tablespace by default.
+
+* UNLIMITED TABLESPACE removes ALL storage limits across ALL tablespaces:
+  +--------------------+-------------------------------------------------------+
+  |  Scenario          |  Result                                               |
+  +--------------------+-------------------------------------------------------+
+  |  Without it        |  User has ZERO quota → INSERT fails after 1st row    |
+  |  With quota only   |  User gets a fixed cap (e.g., 100MB) on one space    |
+  |  With UNLIMITED    |  User can write as much data as disk physically holds |
+  +--------------------+-------------------------------------------------------+
+
+* ALTERNATIVE — Grant quota on a specific tablespace only (more secure):
+    ALTER USER pdb_admin QUOTA 500M ON users;
+    ALTER USER pdb_admin QUOTA UNLIMITED ON users;
+  This is preferred in production — UNLIMITED TABLESPACE is too broad for
+  real environments as it grants power over ALL tablespaces including SYSTEM.
+
+================================================================================
+  SIDE-BY-SIDE SUMMARY
+================================================================================
+
+  GRANT CONNECT           TO pdb_admin;  --> Can log in
+  GRANT RESOURCE          TO pdb_admin;  --> Can create tables, triggers, etc.
+  GRANT UNLIMITED TABLESPACE TO pdb_admin; --> Can actually store data on disk
+
+  All three together = a fully functional developer account.
+
+================================================================================
+  WHAT EACH ERROR LOOKS LIKE WITHOUT THESE GRANTS
+================================================================================
+
+  +---------------------+------------------------------------------------------+
+  |  Missing Grant      |  Error You Will See                                  |
+  +---------------------+------------------------------------------------------+
+  |  CONNECT            |  ORA-01045: user lacks CREATE SESSION privilege      |
+  |  RESOURCE           |  ORA-01031: insufficient privileges (on CREATE TABLE)|
+  |  UNLIMITED          |  ORA-01950: no privileges on tablespace 'USERS'      |
+  TABLESPACE
+  +---------------------+------------------------------------------------------+
+
+================================================================================
+  PRODUCTION RULE OF THUMB
+================================================================================
+*  Learning / Practice environment  →  GRANT CONNECT, RESOURCE + UNLIMITED
+                                        TABLESPACE  (simple, no restrictions)
+
+*  Real production environment      →  Grant ONLY specific privileges needed
+                                        + QUOTA on specific tablespace only
+                                        (principle of least privilege)
+
+================================================================================

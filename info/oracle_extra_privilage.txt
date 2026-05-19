@@ -1,0 +1,174 @@
+================================================================================
+         ORACLE: COMPLETE PRIVILEGE MAP (Beyond the Basic 5)
+================================================================================
+[ ALREADY COVERED ]
+  ✅ CONNECT              (login)
+  ✅ RESOURCE             (build objects)
+  ✅ UNLIMITED TABLESPACE (storage)
+  ✅ CREATE VIEW          (views)
+  ✅ CREATE SYNONYM       (aliases)
+================================================================================
+  REMAINING PRIVILEGES — GROUPED BY CATEGORY
+================================================================================
+
+================================================================================
+ CATEGORY 1: DDL PRIVILEGES (Building More Object Types)
+================================================================================
+These let users CREATE more types of database objects beyond what RESOURCE gives.
+
+  +-----------------------------+----------------------------------------------+
+  |  Privilege                  |  What It Does                                |
+  +-----------------------------+----------------------------------------------+
+  |  CREATE DATABASE LINK       |  Connect this DB to another remote Oracle DB |
+  |  CREATE MATERIALIZED VIEW   |  Create a physically stored snapshot of a    |
+  |                             |  query result (like a cached view on disk)   |
+  |  CREATE PUBLIC SYNONYM      |  Create aliases visible to ALL users in DB   |
+  |  CREATE PUBLIC DATABASE LINK|  Create a DB link usable by ALL users        |
+  |  CREATE TABLESPACE          |  Define new physical storage containers      |
+  |  CREATE ROLE                |  Bundle privileges into a new named role     |
+  |  CREATE USER                |  Add new user accounts to the database       |
+  |  CREATE PROFILE             |  Define password/resource policies for users |
+  +-----------------------------+----------------------------------------------+
+
+* Quick Grant Example:
+  GRANT CREATE DATABASE LINK, CREATE MATERIALIZED VIEW TO pdb_admin;
+
+================================================================================
+ CATEGORY 2: DBA-LEVEL SYSTEM PRIVILEGES (Admin Power)
+================================================================================
+These are DANGEROUS — they affect the whole database, not just one user's objects.
+
+  +-----------------------------+----------------------------------------------+
+  |  Privilege                  |  What It Does                                |
+  +-----------------------------+----------------------------------------------+
+  |  DBA                        |  Master role — contains ALL system privs.    |
+  |                             |  Equivalent to root/sudo in Linux            |
+  |  SYSDBA                     |  God-mode: startup, shutdown, full control   |
+  |  SYSOPER                    |  Limited god-mode: startup/shutdown only,    |
+  |                             |  no access to actual user data               |
+  |  SYSBACKUP                  |  Dedicated privilege for RMAN backup ops     |
+  |  SYSDG                      |  Controls Oracle Data Guard (replication)    |
+  |  SYSKM                      |  Manages encryption key wallet operations    |
+  +-----------------------------+----------------------------------------------+
+
+* Rule: NEVER grant DBA/SYSDBA to regular users in production.
+
+================================================================================
+ CATEGORY 3: ALTER PRIVILEGES (Modifying Existing Objects)
+================================================================================
+These let users MODIFY objects they don't own — dangerous in wrong hands.
+
+  +-----------------------------+----------------------------------------------+
+  |  Privilege                  |  What It Does                                |
+  +-----------------------------+----------------------------------------------+
+  |  ALTER ANY TABLE            |  Modify structure of any table in the DB     |
+  |  ALTER ANY INDEX            |  Rebuild/rename any index in the DB          |
+  |  ALTER ANY SEQUENCE         |  Change increment/cache of any sequence      |
+  |  ALTER ANY PROCEDURE        |  Recompile/modify any stored procedure       |
+  |  ALTER USER                 |  Change passwords, quotas for any user       |
+  |  ALTER SYSTEM               |  Change live database parameters (SGA, etc) |
+  |  ALTER DATABASE             |  Mount, open, change DB-level settings       |
+  |  ALTER TABLESPACE           |  Resize, rename, offline a tablespace        |
+  +-----------------------------+----------------------------------------------+
+
+================================================================================
+ CATEGORY 4: DROP PRIVILEGES (Deleting Objects You Don't Own)
+================================================================================
+
+  +-----------------------------+----------------------------------------------+
+  |  Privilege                  |  What It Does                                |
+  +-----------------------------+----------------------------------------------+
+  |  DROP ANY TABLE             |  Delete ANY user's table in the database     |
+  |  DROP ANY INDEX             |  Remove any index across all schemas         |
+  |  DROP ANY VIEW              |  Delete any view across all schemas          |
+  |  DROP ANY SEQUENCE          |  Remove any sequence                         |
+  |  DROP ANY PROCEDURE         |  Delete any stored procedure/function        |
+  |  DROP USER                  |  Delete user accounts entirely               |
+  |  DROP TABLESPACE            |  Remove physical storage containers          |
+  |  DROP ANY TRIGGER           |  Delete any trigger across all schemas       |
+  +-----------------------------+----------------------------------------------+
+
+* Rule: DROP ANY TABLE is one of the most dangerous privs — one wrong
+  command can wipe an entire production schema permanently.
+
+================================================================================
+ CATEGORY 5: SELECT / DML PRIVILEGES (Reading & Writing Others' Data)
+================================================================================
+These let a user access objects owned by OTHER users/schemas.
+
+  +-----------------------------+----------------------------------------------+
+  |  Privilege                  |  What It Does                                |
+  +-----------------------------+----------------------------------------------+
+  |  SELECT ANY TABLE           |  Read data from ANY table in the database    |
+  |  INSERT ANY TABLE           |  Insert rows into ANY table                  |
+  |  UPDATE ANY TABLE           |  Modify rows in ANY table                    |
+  |  DELETE ANY TABLE           |  Delete rows from ANY table                  |
+  |  SELECT ANY SEQUENCE        |  Use any sequence to generate numbers        |
+  |  SELECT ANY DICTIONARY      |  Query all V$ and DBA_ system views          |
+  |  EXECUTE ANY PROCEDURE      |  Run any stored procedure/function/package   |
+  +-----------------------------+----------------------------------------------+
+
+* Normal alternative (safer) — grant on specific objects only:
+  GRANT SELECT ON hr.employees TO pdb_admin;
+  GRANT INSERT, UPDATE ON hr.orders TO pdb_admin;
+
+================================================================================
+ CATEGORY 6: SESSION & DEBUGGING PRIVILEGES
+================================================================================
+
+  +-----------------------------+----------------------------------------------+
+  |  Privilege                  |  What It Does                                |
+  +-----------------------------+----------------------------------------------+
+  |  ALTER SESSION              |  Change own session settings (NLS, container)|
+  |  RESTRICTED SESSION         |  Log in when DB is in restricted mode        |
+  |  DEBUG CONNECT SESSION      |  Attach a debugger to your own session       |
+  |  DEBUG ANY PROCEDURE        |  Debug any stored procedure in the DB        |
+  |  BECOME USER                |  Impersonate any other user — extremely rare |
+  +-----------------------------+----------------------------------------------+
+
+================================================================================
+ CATEGORY 7: AUDIT & MONITORING PRIVILEGES
+================================================================================
+
+  +-----------------------------+----------------------------------------------+
+  |  Privilege                  |  What It Does                                |
+  +-----------------------------+----------------------------------------------+
+  |  AUDIT SYSTEM               |  Enable/disable auditing on system events    |
+  |  AUDIT ANY                  |  Audit any object in the database            |
+  |  ADMINISTER DATABASE TRIGGER|  Create DB-level triggers (ON DATABASE)      |
+  |  ANALYZE ANY                |  Collect statistics on any object (DBMS_STATS)|
+  +-----------------------------+----------------------------------------------+
+
+================================================================================
+  FULL PICTURE: WHO GETS WHAT (Rule of Thumb)
+================================================================================
+
+  +--------------------+--------------------------------------------------------+
+  |  User Type         |  Typical Grants                                        |
+  +--------------------+--------------------------------------------------------+
+  |  Student / Dev     |  CONNECT + RESOURCE + UNLIMITED TABLESPACE             |
+  |                    |  + CREATE VIEW + CREATE SYNONYM                        |
+  +--------------------+--------------------------------------------------------+
+  |  App Schema User   |  CREATE SESSION + CREATE TABLE + CREATE VIEW           |
+  |                    |  + QUOTA 500M ON users  (no UNLIMITED)                 |
+  +--------------------+--------------------------------------------------------+
+  |  Read-Only Report  |  CREATE SESSION + SELECT on specific tables only       |
+  |  User              |                                                        |
+  +--------------------+--------------------------------------------------------+
+  |  DBA / Admin       |  DBA role  OR  SYSDBA  (full access)                  |
+  +--------------------+--------------------------------------------------------+
+
+================================================================================
+  HOW TO SEE ALL PRIVILEGES GRANTED TO YOUR USER RIGHT NOW
+================================================================================
+
+  -- Roles granted to you:
+  SELECT granted_role FROM user_role_privs;
+
+  -- System privileges granted directly to you:
+  SELECT privilege FROM user_sys_privs;
+
+  -- Object privileges (on specific tables/views):
+  SELECT privilege, table_name, owner FROM user_tab_privs;
+
+================================================================================

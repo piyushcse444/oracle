@@ -1,0 +1,47 @@
+Step 1: Log into the CDB Root:
+        	sudo docker exec -it oracle19c sqlplus 'sys/3041Sigm# as sysdba'
+
+Step 2: Execute the PDB Creation Commands
+	
+	1. Create the new PDB(assignment_pdb) from the Seed Template
+	   	CREATE PLUGGABLE DATABASE assignment_pdb\ 
+           	ADMIN USER pdb_admin IDENTIFIED BY "AdminPass123!"\
+           	FILE_NAME_CONVERT = ('/opt/oracle/oradata/XE/pdbseed/', '/opt/oracle/oradata/XE/assignment_pdb/');
+		
+		ADMIN USER: Creates a local administrative account specifically for this PDB so you don't have to keep logging in as SYS.
+		FILE_NAME_CONVERT: Tells Oracle to copy the physical storage data files from the template directory (pdbseed) and paste them into a new folder named after your custom PDB.
+
+	2. Open the New PDB
+		When a new PDB is created, Oracle puts it into a MOUNTED (offline) state by default. You must open it to allow network connections:
+			ALTER PLUGGABLE DATABASE assignment_pdb OPEN;
+
+	3. Save the Open State (Optional but Recommended)
+		By default, Oracle closes all custom PDBs when the container restarts. Run this command so your new PDB automatically boots up whenever you start your Docker container:
+			ALTER PLUGGABLE DATABASE assignment_pdb SAVE STATE;
+
+Step 3: Verify Your New PDB is Live
+		SELECT name, open_mode FROM v$pdbs;
+
+step 4: GRANT necessory permission to new PDB:
+		1) show current container
+			show con_name; 
+		2) change session to new pdb container 
+			alter session set container = assignment_pdb;
+		3) check if the specific user is exists inside new pdb 
+			SELECT username FROM dba_users WHERE username = 'PDB_ADMIN'; 
+		4) grant necessory privilage to user 
+			GRANT CONNECT , RESOURCE to PDB_ADMIN;
+			GRANT UNLIMITED TABLESPACE TO pdb_admin;
+				1) CONNECT → "Can you even knock on Oracle's door?" — just the login key.
+				2) RESOURCE → "Can you build furniture once inside?" — DDL creation rights.
+				3) UNLIMITED TABLESPACE →  storage quota.
+
+Step 5: Connecting to Your New PDB
+		sudo docker exec -it oracle19c sqlplus 'pdb_admin/"AdminPass123!"@localhost:1521/assignment_pdb'
+
+
+Step 6: verify the pdb and user
+		SHOW USER;
+		SELECT username FROM user_users;
+		SELECT SYS_CONTEXT('USERENV', 'CON_NAME') FROM dual;
+

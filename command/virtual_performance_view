@@ -1,7 +1,5 @@
+ORACLE DATABASE: V$ VIRTUAL VIEWS
 ================================================================================
-                    ORACLE DATABASE: V$ VIRTUAL VIEWS
-================================================================================
-
 [ DEFINITION ]
 --------------
 * V$ Views (Virtual / Dynamic Performance Views) are live, read-only system 
@@ -9,71 +7,92 @@
 * They provide a direct window into the database's active memory (RAM).
 * Data is highly volatile: it changes every millisecond and resets completely 
   whenever the database/Docker container restarts.
-
 * NOTE: You must be logged in as an administrator (SYS or DBA) to read them.
-
-
 ================================================================================
 1. V$DATABASE  --> Focus: Physical Structures & Storage State
 ================================================================================
 Queries the physical control files to check global configurations.
-
 * Key Columns:
   - NAME            : The global name of the database container (e.g., XE).
   - OPEN_MODE       : Operational state (READ WRITE, READ ONLY, MOUNTED).
   - LOG_MODE        : Backup tracking status (ARCHIVELOG / NOARCHIVELOG).
   - PLATFORM_NAME   : The hosting OS architecture (e.g., Linux x86 64-bit).
-
 * Quick SQL:
   SELECT name, open_mode, log_mode, platform_name FROM v$database;
-
-
 ================================================================================
 2. V$INSTANCE  --> Focus: Memory Engine Uptime & Process State
 ================================================================================
 Monitors the active software processes currently executing in your system RAM.
-
 * Key Columns:
   - INSTANCE_NAME   : The System Identifier (SID) of the active memory process.
   - HOST_NAME       : The network name of the computer hosting the engine.
   - VERSION         : The base release version string of the software.
   - STARTUP_TIME    : Exact timestamp showing when the database was turned on.
   - STATUS          : Operating lifecycle state (OPEN, CLOSED, STARTED).
-
 * Quick SQL:
   SELECT instance_name, host_name, startup_time, status FROM v$instance;
-
-
 ================================================================================
 3. V$SESSION   --> Focus: Live Connections & User Activity Audit
 ================================================================================
 Tracks every human user connection and background system task right now.
-
 * Key Columns:
   - SID / SERIAL#   : Unique IDs used to identify or terminate a stuck connection.
   - USERNAME        : The login account name (e.g., SYS, TEST_USER).
   - STATUS          : Activity state (ACTIVE = running a query, INACTIVE).
   - PROGRAM         : The software tools being used (e.g., sqlplus, python3).
   - OSUSER          : The desktop username on the client computer (e.g., kali).
-
 * Quick SQL:
   SELECT sid, serial#, username, status, program, osuser 
   FROM v$session 
   WHERE username IS NOT NULL;
-
-
 ================================================================================
 4. V$VERSION   --> Focus: Software Environment & Architecture
 ================================================================================
 Provides a clear, line-by-line inventory of components and patches.
-
 * Key Columns:
   - BANNER          : Complete product details, bit-architecture, and versions.
-
 * Quick SQL:
   SELECT banner FROM v$version;
+================================================================================
+5. V$PDBS      --> Focus: Pluggable Database Inventory & State (CDB Only)
+================================================================================
+Lists all Pluggable Databases (PDBs) that exist inside the current Container
+Database (CDB). Think of the CDB as the outer shell and PDBs as isolated
+mini-databases living inside it — each with its own schemas, users, and data.
+This view is only meaningful when connected to the root container (CDB$ROOT).
 
+* Key Columns:
+  - CON_ID          : Numeric Container ID that uniquely tags each PDB within
+                      the CDB (e.g., 2 = PDB$SEED, 3+ = user-created PDBs).
+  - NAME            : The logical name of the Pluggable Database (e.g., XEPDB1).
+  - OPEN_MODE       : Current accessibility state of the PDB:
+                        READ WRITE  --> fully open, users can connect & transact.
+                        READ ONLY   --> queryable but no writes allowed.
+                        MOUNTED     --> files loaded but not yet opened.
+                        MIGRATE     --> undergoing an upgrade or migration.
+  - RESTRICTED      : YES/NO flag — if YES, only users with RESTRICTED SESSION
+                      privilege can log in (used during maintenance windows).
+  - OPEN_TIME       : Exact timestamp of when this PDB was last opened.
+  - CREATE_SCN      : System Change Number recorded at PDB creation — useful
+                      for point-in-time recovery and cloning operations.
+  - GUID            : A globally unique identifier for the PDB across all CDBs,
+                      critical for PDB plug/unplug portability operations.
 
+* Quick SQL:
+  -- List all PDBs with their current state:
+  SELECT con_id, name, open_mode, restricted, open_time FROM v$pdbs;
+
+  -- Check only user-created PDBs (CON_ID > 2 skips CDB$ROOT and PDB$SEED):
+  SELECT con_id, name, open_mode FROM v$pdbs WHERE con_id > 2;
+
+* Context Notes:
+  - PDB$SEED (CON_ID = 2) is Oracle's read-only template PDB — it cannot be
+    opened in READ WRITE mode and is used as the blueprint for new PDBs.
+  - If V$PDBS returns only PDB$SEED, no user PDBs have been created yet.
+  - To connect into a specific PDB after identifying it here:
+      ALTER SESSION SET CONTAINER = XEPDB1;
+  - A PDB must be in READ WRITE open_mode before any user can connect to it
+    or run DML (INSERT / UPDATE / DELETE) operations inside it.
 ================================================================================
              PRO-TIP: RECONCILING COMPONENT ERRORS (ORA-00904)
 ================================================================================
@@ -83,6 +102,4 @@ Provides a clear, line-by-line inventory of components and patches.
 * Double Quotes (" ") : Reserved ONLY for naming database columns, tables, 
                         or user accounts containing special characters.
   Example: CREATE USER cse_user IDENTIFIED BY "StudentPass123!";
-
 ================================================================================
-

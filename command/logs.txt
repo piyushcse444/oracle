@@ -1,0 +1,199 @@
+================================================================================
+         ORACLE: ARCHIVELOG vs NOARCHIVELOG — Complete Guide
+================================================================================
+
+[ WHAT IS A REDO LOG? — The Foundation ]
+--------------------------------------------------------------------------------
+* Every single change you make in Oracle (INSERT, UPDATE, DELETE, DDL) is
+  first written to a REDO LOG before touching the actual data files.
+* Think of Redo Logs as Oracle's live "security camera recording" —
+  every transaction is captured, frame by frame, in sequence.
+* Oracle maintains a fixed set of these log files called ONLINE REDO LOG FILES
+  and writes to them in a circular loop:
+  
+        [Log Group 1] → [Log Group 2] → [Log Group 3] → back to [Log Group 1]
+                                                                      ↑
+                                              OVERWRITES here when loop completes
+
+* The critical question is: WHAT HAPPENS when Oracle loops back to overwrite?
+  That answer is what ARCHIVELOG vs NOARCHIVELOG controls.
+
+================================================================================
+ MODE 1: NOARCHIVELOG  →  "Overwrite old logs freely, no backup kept"
+================================================================================
+* When the circular loop completes, Oracle simply OVERWRITES the old redo log.
+* The previous log data is GONE FOREVER — no archive copy is saved anywhere.
+
+  [Log 1: Mon] → [Log 2: Tue] → [Log 3: Wed] → OVERWRITE Log 1 with Thu data
+                                                        ↑
+                                               Mon's data erased permanently
+
+* CONSEQUENCE:
+  - If your database crashes on Thursday, you can only restore to the last
+    full backup (e.g., last Sunday night).
+  - Everything between Sunday backup and Thursday crash = PERMANENTLY LOST.
+
+* When is NOARCHIVELOG acceptable?
+  +----------------------------------+
+  |  Development / Learning machines |
+  |  Test environments               |
+  |  Data that can be fully rebuilt  |
+  +----------------------------------+
+
+================================================================================
+ MODE 2: ARCHIVELOG  →  "Save a copy of every filled log before overwriting"
+================================================================================
+* Before Oracle overwrites a redo log, the ARChiver process (ARC0, ARC1...)
+  automatically copies it to an ARCHIVE destination (disk folder or tape).
+* This archived copy is called an ARCHIVED REDO LOG.
+
+  [Log 1: Mon fills up]
+        ↓
+  ARC0 process copies it → /archive/log_mon_001.arc  (saved permanently)
+        ↓
+  Oracle now safely overwrites Log 1 with new data
+
+* CONSEQUENCE:
+  - You have a complete, unbroken chain of every transaction ever made.
+  - If DB crashes on Thursday, restore Sunday backup THEN replay all archived
+    logs from Mon → Tue → Wed → Thu = ZERO data loss possible.
+  - This is called: POINT-IN-TIME RECOVERY (PITR)
+
+* When is ARCHIVELOG required?
+  +------------------------------------------+
+  |  Production databases (always)           |
+  |  Any database that cannot lose data      |
+  |  Hot backups (RMAN while DB is running)  |
+  |  Oracle Data Guard (standby replication) |
+  |  Oracle Streams / GoldenGate             |
+  +------------------------------------------+
+
+================================================================================
+  SIDE BY SIDE COMPARISON
+================================================================================
+
+  +----------------------+-------------------+---------------------------+
+  |  Feature             |  NOARCHIVELOG     |  ARCHIVELOG               |
+  +----------------------+-------------------+---------------------------+
+  |  Old logs saved?     |  ❌ No            |  ✅ Yes, to archive dest  |
+  |  Point-in-time       |  ❌ Impossible    |  ✅ Any point possible    |
+  |  recovery            |                   |                           |
+  |  Hot backup (online) |  ❌ Not supported |  ✅ Fully supported       |
+  |  Disk space usage    |  ✅ Low           |  ❌ Grows continuously    |
+  |  Data loss on crash  |  Since last backup|  Near zero possible       |
+  |  Setup complexity    |  ✅ Simple        |  ❌ Needs archive dest    |
+  |  Production ready?   |  ❌ No            |  ✅ Yes                   |
+  +----------------------+-------------------+---------------------------+
+
+================================================================================
+  HOW TO CHECK YOUR CURRENT MODE
+================================================================================
+
+  -- Method 1: From V$DATABASE (you already know this):
+  SELECT name, log_mode FROM v$database;
+  -- Output: LOG_MODE = ARCHIVELOG or NOARCHIVELOG
+
+  -- Method 2: From SQL*Plus command:
+  ARCHIVE LOG LIST;
+  -- Shows: mode, archive destination, oldest/current log sequence number
+
+================================================================================
+  HOW TO SEE THE LOGS — 3 TYPES TO KNOW
+================================================================================
+
+--------------------------------------------------------------------------------
+ LOG TYPE 1: ONLINE REDO LOG FILES (live circular logs)
+--------------------------------------------------------------------------------
+* These are the active, currently-in-use log files Oracle writes to right now.
+
+  -- See all online log groups and their status:
+  SELECT group#, members, bytes/1024/1024 AS size_mb, status
+  FROM v$log;
+
+  -- Status meanings:
+  -- CURRENT  → Oracle is actively writing to this group RIGHT NOW
+  -- ACTIVE   → Log is full but not yet archived (still needed for crash recovery)
+  -- INACTIVE → Log is done, archived if needed, safe to overwrite
+  -- UNUSED   → Never been written to yet
+
+  -- See actual file paths on disk:
+  SELECT group#, member FROM v$logfile ORDER BY group#;
+
+--------------------------------------------------------------------------------
+ LOG TYPE 2: ARCHIVED REDO LOG FILES (saved historical logs)
+--------------------------------------------------------------------------------
+* Only exists if you are in ARCHIVELOG mode.
+
+  -- See all archived logs Oracle has saved:
+  SELECT sequence#, name, first_time, next_time, archived, status
+  FROM v$archived_log
+  ORDER BY sequence#;
+
+  -- Column meanings:
+  -- SEQUENCE# : Log's serial number in the chain (must be unbroken for recovery)
+  -- NAME      : Full file path of the archived log on disk
+  -- FIRST_TIME: When this log started capturing transactions
+  -- NEXT_TIME : When this log stopped (hand-off to next log)
+  -- ARCHIVED  : YES = safely saved, NO = still in progress
+  -- STATUS    : A = Available, D = Deleted, X = Expired
+
+  -- See where archived logs are being saved to:
+  SELECT dest_id, dest_name, status, target, archiver, destination
+  FROM v$archive_dest
+  WHERE status = 'VALID';
+
+--------------------------------------------------------------------------------
+ LOG TYPE 3: ALERT LOG (Oracle's diary — errors, startups, warnings)
+--------------------------------------------------------------------------------
+* The most important log for diagnosing problems — Oracle writes every major
+  event here: startup, shutdown, ORA- errors, parameter changes.
+
+  -- Find where the alert log lives on your system:
+  SELECT value FROM v$diag_info WHERE name = 'Diag Trace';
+  -- Example output: /opt/oracle/diag/rdbms/xe/XE/trace
+
+  -- Then in your Linux terminal (outside SQL*Plus):
+  tail -f /opt/oracle/diag/rdbms/xe/XE/trace/alert_XE.log
+  -- This streams the live alert log in real time
+
+  -- OR query it directly from SQL (no need to leave SQL*Plus):
+  SELECT originating_timestamp, message_text
+  FROM v$diag_alert_ext
+  WHERE originating_timestamp > SYSDATE - 1   -- last 24 hours
+  ORDER BY originating_timestamp DESC;
+
+================================================================================
+  QUICK REFERENCE: WHICH VIEW SHOWS WHAT
+================================================================================
+
+  +---------------------+------------------------------------------------------+
+  |  View / Command     |  What You See                                        |
+  +---------------------+------------------------------------------------------+
+  |  V$DATABASE         |  Current LOG_MODE (ARCHIVELOG / NOARCHIVELOG)        |
+  |  V$LOG              |  Online redo log groups, sizes, current status       |
+  |  V$LOGFILE          |  Physical file paths of online redo logs on disk     |
+  |  V$ARCHIVED_LOG     |  History of all archived logs ever created           |
+  |  V$ARCHIVE_DEST     |  Destination folders where archives are saved        |
+  |  V$LOG_HISTORY      |  Summary history of all log switches over time       |
+  |  V$DIAG_INFO        |  Path to alert log and trace files on disk           |
+  |  V$DIAG_ALERT_EXT   |  Alert log contents queryable directly from SQL      |
+  |  ARCHIVE LOG LIST   |  Quick summary command in SQL*Plus                   |
+  +---------------------+------------------------------------------------------+
+
+================================================================================
+  HOW TO SWITCH MODES (SYS only — requires DB restart)
+================================================================================
+
+  -- Switch to ARCHIVELOG mode:
+  SHUTDOWN IMMEDIATE;
+  STARTUP MOUNT;
+  ALTER DATABASE ARCHIVELOG;
+  ALTER DATABASE OPEN;
+
+  -- Switch to NOARCHIVELOG mode:
+  SHUTDOWN IMMEDIATE;
+  STARTUP MOUNT;
+  ALTER DATABASE NOARCHIVELOG;
+  ALTER DATABASE OPEN;
+
+================================================================================

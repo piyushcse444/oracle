@@ -1,0 +1,933 @@
+===============================================================================
+         ORACLE DATABASE — COMPLETE SQL NOTES  (DDL + DML + SYSTEM VIEWS)
+                     Designed for Notepad  |  Font: Courier New
+================================================================================
+  HOW TO USE THIS FILE IN NOTEPAD:
+  > Open Notepad
+  > Format menu --> uncheck Word Wrap
+  > Change font to Courier New, Size 10 for best alignment
+================================================================================
+ 
+  SEQUENCE TO FOLLOW:
+  STEP 1  -->  Know Your Database       (V$ Views)
+  STEP 2  -->  Explore Schemas / Users  (DBA_USERS)
+  STEP 3  -->  Find All Tables          (USER_TABLES)
+  STEP 4  -->  Inspect Columns          (DESCRIBE / USER_TAB_COLUMNS)
+  STEP 5  -->  DDL Commands             (CREATE, ALTER, DROP, TRUNCATE)
+  STEP 6  -->  DML Commands             (INSERT, SELECT, UPDATE, DELETE, MERGE)
+  STEP 7  -->  Transaction Control      (COMMIT, ROLLBACK, SAVEPOINT)
+ 
+================================================================================
+  STEP 1 -- KNOW YOUR DATABASE
+================================================================================
+ 
+  Before anything else -- confirm WHICH database you are in,
+  its state, version, and which container you are connected to.
+ 
+  ------------------------------------------------------------------------
+  1A. CHECK DATABASE NAME, MODE AND PLATFORM
+  ------------------------------------------------------------------------
+ 
+  SELECT name, open_mode, log_mode, platform_name
+  FROM   v$database;
+ 
+  Column         Meaning
+  ----------     -------------------------------------------------------
+  NAME           Global database name (e.g., XE)
+  OPEN_MODE      READ WRITE = live | READ ONLY = no writes | MOUNTED
+  LOG_MODE       ARCHIVELOG = logs saved | NOARCHIVELOG = logs overwritten
+  PLATFORM_NAME  Host OS (e.g., Linux x86 64-bit)
+ 
+  ------------------------------------------------------------------------
+  1B. CHECK INSTANCE / ENGINE STATE
+  ------------------------------------------------------------------------
+ 
+  SELECT instance_name, host_name, version, startup_time, status
+  FROM   v$instance;
+ 
+  Column          Meaning
+  -----------     -------------------------------------------------------
+  INSTANCE_NAME   SID of the memory process (e.g., XE)
+  HOST_NAME       Computer name hosting Oracle
+  VERSION         Oracle release (e.g., 21.3.0.0.0)
+  STARTUP_TIME    When the DB was last started
+  STATUS          OPEN = running | CLOSED | STARTED
+ 
+  ------------------------------------------------------------------------
+  1C. CHECK ALL COMPONENTS AND VERSIONS
+  ------------------------------------------------------------------------
+ 
+  SELECT banner FROM v$version;
+ 
+  ------------------------------------------------------------------------
+  1D. WHICH CONTAINER AM I IN? (CDB / PDB)
+  ------------------------------------------------------------------------
+ 
+  SHOW CON_NAME;    -- shows CDB$ROOT or XEPDB1
+  SHOW USER;        -- shows currently logged-in user
+ 
+  -- Switch into the PDB (do this before creating tables/users):
+  ALTER SESSION SET CONTAINER = XEPDB1;
+ 
+  ------------------------------------------------------------------------
+  1E. LIST ALL PLUGGABLE DATABASES (PDBs)
+  ------------------------------------------------------------------------
+ 
+  SELECT con_id, name, open_mode, restricted, open_time
+  FROM   v$pdbs;
+ 
+  -- Only user-created PDBs (skip seed and root):
+  SELECT con_id, name, open_mode
+  FROM   v$pdbs
+  WHERE  con_id > 2;
+ 
+  CON_ID   NAME        Meaning
+  ------   --------    ---------------------------------------------------
+  1        CDB$ROOT    The outer container (root)
+  2        PDB$SEED    Read-only template -- cannot be opened READ WRITE
+  3+       XEPDB1      Your actual user PDB -- connect here for work
+ 
+  NOTE: PDB must be in READ WRITE open_mode before users can connect.
+ 
+================================================================================
+  STEP 2 -- EXPLORE SCHEMAS / USERS
+================================================================================
+ 
+  In Oracle, every user IS a schema.
+  A schema = the namespace that holds all objects owned by a user.
+ 
+  ------------------------------------------------------------------------
+  2A. LIST ALL USERS IN THE DATABASE
+  ------------------------------------------------------------------------
+ 
+  SELECT username, account_status, created, default_tablespace
+  FROM   dba_users
+  ORDER BY created DESC;
+ 
+  account_status values:
+  OPEN            --> user can log in normally
+  EXPIRED         --> password expired, must be reset
+  LOCKED          --> account is locked, cannot log in
+  EXPIRED & LOCKED --> both problems at once
+ 
+  ------------------------------------------------------------------------
+  2B. YOUR OWN USER INFO ONLY
+  ------------------------------------------------------------------------
+ 
+  SELECT username, account_status, default_tablespace
+  FROM   user_users;
+ 
+  ------------------------------------------------------------------------
+  2C. ROLES GRANTED TO A USER
+  ------------------------------------------------------------------------
+ 
+  SELECT granted_role, admin_option
+  FROM   dba_role_privs
+  WHERE  grantee = 'PDB_ADMIN';
+ 
+  ------------------------------------------------------------------------
+  2D. SYSTEM PRIVILEGES OF A USER
+  ------------------------------------------------------------------------
+ 
+  SELECT privilege, admin_option
+  FROM   dba_sys_privs
+  WHERE  grantee = 'PDB_ADMIN';
+ 
+  ------------------------------------------------------------------------
+  2E. OBJECT PRIVILEGES OF A USER
+  ------------------------------------------------------------------------
+ 
+  SELECT privilege, table_name, owner
+  FROM   dba_tab_privs
+  WHERE  grantee = 'PDB_ADMIN';
+ 
+  ------------------------------------------------------------------------
+  2F. GRANT PRIVILEGES TO A USER (run as SYS)
+  ------------------------------------------------------------------------
+ 
+  -- Switch into PDB first:
+  ALTER SESSION SET CONTAINER = XEPDB1;
+ 
+  -- Create user:
+  CREATE USER pdb_admin IDENTIFIED BY Admin123;
+ 
+  -- Grant minimum working set:
+  GRANT CONNECT            TO pdb_admin;  -- login
+  GRANT RESOURCE           TO pdb_admin;  -- create tables, sequences, etc.
+  GRANT UNLIMITED TABLESPACE TO pdb_admin; -- no storage cap
+  GRANT CREATE VIEW        TO pdb_admin;  -- create views
+  GRANT CREATE SYNONYM     TO pdb_admin;  -- create aliases
+ 
+  ------------------------------------------------------------------------
+  VIEW REFERENCE
+  View              Access Level    Use For
+  --------          ------------    -----------------------------------
+  dba_users         DBA only        All users in the database
+  all_users         Any user        Users visible to you
+  user_users        Any user        Only your own user info
+  dba_role_privs    DBA only        Roles granted to users
+  dba_sys_privs     DBA only        System privileges of users
+  user_role_privs   Any user        Roles granted to you
+  user_sys_privs    Any user        Your own system privileges
+ 
+================================================================================
+  STEP 3 -- FIND ALL TABLES
+================================================================================
+ 
+  ------------------------------------------------------------------------
+  3A. ALL TABLES YOU OWN
+  ------------------------------------------------------------------------
+ 
+  SELECT table_name, num_rows, last_analyzed
+  FROM   user_tables
+  ORDER BY table_name;
+ 
+  ------------------------------------------------------------------------
+  3B. ALL TABLES ACROSS ALL SCHEMAS (DBA view)
+  ------------------------------------------------------------------------
+ 
+  SELECT owner, table_name, num_rows
+  FROM   dba_tables
+  WHERE  owner NOT IN ('SYS','SYSTEM','XDB','CTXSYS','MDSYS')
+  ORDER BY owner, table_name;
+ 
+  -- Excluding Oracle system schemas shows only user-created tables.
+ 
+  ------------------------------------------------------------------------
+  3C. SEARCH TABLE BY NAME PATTERN
+  ------------------------------------------------------------------------
+ 
+  SELECT table_name FROM user_tables
+  WHERE  table_name LIKE 'STU%';    -- finds STUDENT, STUDENT_BACKUP, etc.
+ 
+  SELECT table_name FROM user_tables
+  WHERE  table_name LIKE '%BACK%';  -- finds tables with BACK in the name
+ 
+  ------------------------------------------------------------------------
+  3D. COUNT YOUR TABLES
+  ------------------------------------------------------------------------
+ 
+  SELECT COUNT(*) AS total_tables FROM user_tables;
+ 
+  ------------------------------------------------------------------------
+  3E. LIST ALL YOUR VIEWS
+  ------------------------------------------------------------------------
+ 
+  SELECT view_name FROM user_views ORDER BY view_name;
+ 
+  ------------------------------------------------------------------------
+  3F. LIST ALL YOUR SEQUENCES
+  ------------------------------------------------------------------------
+ 
+  SELECT sequence_name, last_number, increment_by, max_value
+  FROM   user_sequences;
+ 
+  ------------------------------------------------------------------------
+  3G. LIST ALL YOUR INDEXES
+  ------------------------------------------------------------------------
+ 
+  SELECT index_name, table_name, uniqueness, status
+  FROM   user_indexes
+  ORDER BY table_name;
+ 
+================================================================================
+  STEP 4 -- INSPECT COLUMNS AND STRUCTURE
+================================================================================
+ 
+  ------------------------------------------------------------------------
+  4A. QUICK STRUCTURE VIEW (SQL*Plus shortcut)
+  ------------------------------------------------------------------------
+ 
+  DESC student;
+  -- or:
+  DESCRIBE student;
+ 
+  -- Output shows:
+  -- Column Name | Nullable | Data Type
+ 
+  ------------------------------------------------------------------------
+  4B. FULL COLUMN DETAILS
+  ------------------------------------------------------------------------
+ 
+  SELECT column_name, data_type, data_length, data_precision,
+         nullable, data_default, column_id
+  FROM   user_tab_columns
+  WHERE  table_name = 'STUDENT'
+  ORDER BY column_id;
+ 
+  column_id   = display order of column in the table
+  nullable    = Y (optional field) | N (NOT NULL, required)
+  data_default = default value used if none provided on INSERT
+ 
+  ------------------------------------------------------------------------
+  4C. ALL CONSTRAINTS ON A TABLE
+  ------------------------------------------------------------------------
+ 
+  SELECT constraint_name, constraint_type, search_condition, status
+  FROM   user_constraints
+  WHERE  table_name = 'STUDENT';
+ 
+  constraint_type values:
+  P  -->  PRIMARY KEY
+  U  -->  UNIQUE
+  R  -->  FOREIGN KEY (References)
+  C  -->  CHECK or NOT NULL
+ 
+  ------------------------------------------------------------------------
+  4D. WHICH COLUMNS BELONG TO EACH CONSTRAINT
+  ------------------------------------------------------------------------
+ 
+  SELECT constraint_name, column_name, position
+  FROM   user_cons_columns
+  WHERE  table_name = 'STUDENT'
+  ORDER BY constraint_name, position;
+ 
+  ------------------------------------------------------------------------
+  4E. INDEXES ON A TABLE
+  ------------------------------------------------------------------------
+ 
+  SELECT i.index_name, i.uniqueness, c.column_name, c.column_position
+  FROM   user_indexes i
+  JOIN   user_ind_columns c ON i.index_name = c.index_name
+  WHERE  i.table_name = 'STUDENT';
+ 
+  ------------------------------------------------------------------------
+  4F. COMMENTS ON TABLE AND COLUMNS
+  ------------------------------------------------------------------------
+ 
+  SELECT comments FROM user_tab_comments
+  WHERE  table_name = 'STUDENT';
+ 
+  SELECT column_name, comments FROM user_col_comments
+  WHERE  table_name = 'STUDENT';
+ 
+================================================================================
+  STEP 5 -- DDL COMMANDS  (Data Definition Language)
+================================================================================
+ 
+  IMPORTANT: DDL commands AUTO-COMMIT instantly.
+             You CANNOT roll back a DDL command.
+             CREATE | ALTER | DROP | TRUNCATE | RENAME | COMMENT
+ 
+  ============================================================================
+  5A. CREATE -- Build new database objects
+  ============================================================================
+ 
+  -----------------------------------------------
+  CREATE TABLE -- Basic with all constraint types
+  -----------------------------------------------
+ 
+  CREATE TABLE student (
+    id        NUMBER(10)    PRIMARY KEY,
+    name      VARCHAR2(100) NOT NULL,
+    age       NUMBER(3)     CHECK (age BETWEEN 1 AND 120),
+    email     VARCHAR2(100) UNIQUE,
+    dept_id   NUMBER(10)    REFERENCES department(dept_id),
+    joined_on DATE          DEFAULT SYSDATE
+  );
+ 
+  -----------------------------------------------
+  CREATE TABLE -- Copy structure AND data (CTAS)
+  -----------------------------------------------
+ 
+  -- Full copy with data:
+  CREATE TABLE student_backup AS
+    SELECT * FROM student;
+ 
+  -- Empty copy (structure only, no rows):
+  CREATE TABLE student_empty AS
+    SELECT * FROM student WHERE 1=2;
+ 
+  -----------------------------------------------
+  CREATE SEQUENCE -- Auto-increment number generator
+  -----------------------------------------------
+ 
+  CREATE SEQUENCE student_seq
+    START WITH   1
+    INCREMENT BY 1
+    MAXVALUE     99999
+    NOCYCLE
+    CACHE        20;
+ 
+  -- Use in INSERT:
+  INSERT INTO student (id, name)
+  VALUES (student_seq.NEXTVAL, 'Ravi');
+ 
+  -- See current value:
+  SELECT student_seq.CURRVAL FROM dual;
+ 
+  -----------------------------------------------
+  CREATE VIEW -- Virtual table based on a query
+  -----------------------------------------------
+ 
+  CREATE OR REPLACE VIEW adult_students AS
+    SELECT id, name, age
+    FROM   student
+    WHERE  age >= 18;
+ 
+  -- Query exactly like a table:
+  SELECT * FROM adult_students;
+ 
+  -----------------------------------------------
+  CREATE INDEX -- Speed up queries
+  -----------------------------------------------
+ 
+  CREATE INDEX        idx_stu_name  ON student(name);
+  CREATE UNIQUE INDEX idx_stu_email ON student(email);
+ 
+  -----------------------------------------------
+  CREATE SYNONYM -- Alias / nickname for a table
+  -----------------------------------------------
+ 
+  CREATE SYNONYM stu FOR pdb_admin.student;
+  SELECT * FROM stu;   -- same as SELECT * FROM pdb_admin.student
+ 
+  ============================================================================
+  5B. ALTER -- Modify existing object structure
+  ============================================================================
+ 
+  -----------------------------------------------
+  ALTER TABLE -- Columns
+  -----------------------------------------------
+ 
+  -- Add one column:
+  ALTER TABLE student ADD (phone VARCHAR2(15));
+ 
+  -- Add multiple columns:
+  ALTER TABLE student ADD (
+    phone   VARCHAR2(15),
+    address VARCHAR2(200)
+  );
+ 
+  -- Change column size or type:
+  ALTER TABLE student MODIFY (name VARCHAR2(200));
+ 
+  -- Add NOT NULL to existing column:
+  ALTER TABLE student MODIFY (phone VARCHAR2(15) NOT NULL);
+ 
+  -- Rename a column:
+  ALTER TABLE student RENAME COLUMN phone TO mobile;
+ 
+  -- Drop a column:
+  ALTER TABLE student DROP COLUMN address;
+ 
+  -----------------------------------------------
+  ALTER TABLE -- Constraints
+  -----------------------------------------------
+ 
+  -- Add constraint:
+  ALTER TABLE student ADD CONSTRAINT chk_age
+    CHECK (age > 0);
+ 
+  ALTER TABLE student ADD CONSTRAINT fk_dept
+    FOREIGN KEY (dept_id) REFERENCES department(dept_id);
+ 
+  -- Disable / Enable:
+  ALTER TABLE student DISABLE CONSTRAINT chk_age;
+  ALTER TABLE student ENABLE  CONSTRAINT chk_age;
+ 
+  -- Drop constraint:
+  ALTER TABLE student DROP CONSTRAINT chk_age;
+ 
+  -----------------------------------------------
+  ALTER TABLE -- Rename table
+  -----------------------------------------------
+ 
+  ALTER TABLE student RENAME TO learner;
+ 
+  -----------------------------------------------
+  ALTER USER -- Manage accounts
+  -----------------------------------------------
+ 
+  ALTER USER pdb_admin IDENTIFIED BY NewPass456;   -- change password
+  ALTER USER pdb_admin QUOTA UNLIMITED ON users;   -- storage quota
+  ALTER USER pdb_admin QUOTA 500M ON users;        -- fixed quota
+  ALTER USER pdb_admin ACCOUNT LOCK;               -- lock account
+  ALTER USER pdb_admin ACCOUNT UNLOCK;             -- unlock account
+ 
+  -----------------------------------------------
+  ALTER SEQUENCE
+  -----------------------------------------------
+ 
+  ALTER SEQUENCE student_seq INCREMENT BY 5;
+  ALTER SEQUENCE student_seq CACHE 50;
+ 
+  -----------------------------------------------
+  ALTER SESSION -- Change settings for this session only
+  -----------------------------------------------
+ 
+  ALTER SESSION SET CONTAINER = XEPDB1;
+  ALTER SESSION SET NLS_DATE_FORMAT = 'DD-MON-YYYY';
+ 
+  ============================================================================
+  5C. DROP -- Permanently delete objects
+  ============================================================================
+ 
+  WARNING: DROP is permanent. No ROLLBACK is possible.
+           Always double-check the object name before running.
+ 
+  DROP TABLE    student;
+  DROP TABLE    student CASCADE CONSTRAINTS;  -- removes FK dependencies too
+  DROP VIEW     adult_students;
+  DROP INDEX    idx_stu_name;
+  DROP SEQUENCE student_seq;
+  DROP SYNONYM  stu;
+  DROP USER     pdb_admin CASCADE;            -- drops all their objects too
+ 
+  -----------------------------------------------
+  RECOVER a dropped table (Recycle Bin)
+  -----------------------------------------------
+ 
+  -- See what is in recycle bin:
+  SELECT object_name, original_name, droptime FROM recyclebin;
+ 
+  -- Restore from recycle bin:
+  FLASHBACK TABLE student TO BEFORE DROP;
+ 
+  -- Permanently remove from recycle bin:
+  PURGE TABLE student;
+  PURGE RECYCLEBIN;          -- empty entire recycle bin
+ 
+  ============================================================================
+  5D. TRUNCATE -- Wipe all rows instantly
+  ============================================================================
+ 
+  TRUNCATE TABLE student;
+ 
+  Comparison: TRUNCATE vs DELETE
+  Feature             TRUNCATE              DELETE (DML)
+  ----------------    -------------------   ----------------------
+  Removes rows        ALL rows              Specific or all rows
+  WHERE clause        NOT allowed           Supported
+  Rollback possible   NO (auto-commits)     YES (before COMMIT)
+  Triggers fired      NO                    YES
+  Speed               Very fast             Slower on large tables
+  Resets high-water   YES                   NO
+ 
+  ============================================================================
+  5E. RENAME -- Rename an object
+  ============================================================================
+ 
+  RENAME student TO learner;
+ 
+  ============================================================================
+  5F. COMMENT -- Add documentation to objects
+  ============================================================================
+ 
+  COMMENT ON TABLE  student       IS 'Stores all enrolled student records';
+  COMMENT ON COLUMN student.id    IS 'Unique identifier for each student';
+  COMMENT ON COLUMN student.name  IS 'Full legal name of the student';
+ 
+  -- Read comments back:
+  SELECT comments FROM user_tab_comments WHERE table_name = 'STUDENT';
+  SELECT column_name, comments FROM user_col_comments
+  WHERE  table_name = 'STUDENT';
+ 
+================================================================================
+  STEP 6 -- DML COMMANDS  (Data Manipulation Language)
+================================================================================
+ 
+  IMPORTANT: DML commands are NOT auto-committed.
+             Changes stay in memory until you COMMIT (save) or ROLLBACK (undo).
+             INSERT | SELECT | UPDATE | DELETE | MERGE
+ 
+  ============================================================================
+  6A. INSERT -- Add new rows
+  ============================================================================
+ 
+  -- Insert single row (named columns -- always recommended):
+  INSERT INTO student (id, name, age, email)
+  VALUES (1, 'Ravi Kumar', 20, 'ravi@mail.com');
+ 
+  -- Insert with auto-increment from sequence:
+  INSERT INTO student (id, name, age)
+  VALUES (student_seq.NEXTVAL, 'Amit Sharma', 22);
+ 
+  -- Insert with today's date:
+  INSERT INTO employee (emp_id, emp_name, hire_date)
+  VALUES (101, 'Sneha', SYSDATE);
+ 
+  -- Insert multiple rows at once:
+  INSERT INTO student (id, name, age)
+    SELECT 2, 'Priya', 21 FROM dual UNION ALL
+    SELECT 3, 'Karan', 19 FROM dual UNION ALL
+    SELECT 4, 'Meena', 22 FROM dual;
+ 
+  -- Insert rows from another table:
+  INSERT INTO student_backup
+    SELECT * FROM student WHERE age >= 18;
+ 
+  -- Save after insert:
+  COMMIT;
+ 
+  ============================================================================
+  6B. SELECT -- Read / Query data
+  ============================================================================
+ 
+  -----------------------------------------------
+  Basic Queries
+  -----------------------------------------------
+ 
+  SELECT * FROM student;                          -- all rows, all columns
+  SELECT id, name, age FROM student;              -- specific columns
+  SELECT DISTINCT age FROM student;               -- unique values only
+ 
+  -----------------------------------------------
+  Filter with WHERE
+  -----------------------------------------------
+ 
+  SELECT * FROM student WHERE age > 18;
+  SELECT * FROM student WHERE name = 'Ravi Kumar';
+  SELECT * FROM student WHERE name LIKE 'R%';     -- starts with R
+  SELECT * FROM student WHERE name LIKE '%ar%';   -- contains 'ar'
+  SELECT * FROM student WHERE name LIKE '_avi';   -- any 1 char then 'avi'
+  SELECT * FROM student WHERE age BETWEEN 18 AND 25;
+  SELECT * FROM student WHERE age IN (19, 20, 21);
+  SELECT * FROM student WHERE age NOT IN (19, 20);
+  SELECT * FROM student WHERE email IS NULL;
+  SELECT * FROM student WHERE email IS NOT NULL;
+  SELECT * FROM student WHERE age > 18 AND name LIKE 'R%';
+  SELECT * FROM student WHERE age = 20 OR age = 21;
+ 
+  -----------------------------------------------
+  Sort and Limit
+  -----------------------------------------------
+ 
+  SELECT * FROM student ORDER BY age ASC;           -- low to high
+  SELECT * FROM student ORDER BY name DESC;         -- Z to A
+  SELECT * FROM student ORDER BY age ASC, name ASC; -- sort by 2 columns
+  SELECT * FROM student FETCH FIRST 5 ROWS ONLY;    -- top 5 rows
+ 
+  -----------------------------------------------
+  Aggregate Functions
+  -----------------------------------------------
+ 
+  SELECT COUNT(*)             FROM student;       -- total row count
+  SELECT COUNT(email)         FROM student;       -- non-null emails only
+  SELECT MAX(age)             FROM student;       -- highest age
+  SELECT MIN(age)             FROM student;       -- lowest age
+  SELECT SUM(salary)          FROM employee;      -- total salary
+  SELECT AVG(salary)          FROM employee;      -- average salary
+  SELECT ROUND(AVG(salary),2) FROM employee;      -- rounded to 2 decimals
+ 
+  -----------------------------------------------
+  GROUP BY and HAVING
+  -----------------------------------------------
+ 
+  SELECT age, COUNT(*) AS total_students
+  FROM   student
+  GROUP BY age;
+ 
+  SELECT age, COUNT(*) AS total
+  FROM   student
+  GROUP BY age
+  HAVING COUNT(*) > 1;      -- HAVING filters groups (not individual rows)
+ 
+  -----------------------------------------------
+  JOIN -- Combine multiple tables
+  -----------------------------------------------
+ 
+  -- INNER JOIN: only rows that match in both tables:
+  SELECT s.id, s.name, d.dept_name
+  FROM   student s
+  INNER JOIN department d ON s.dept_id = d.dept_id;
+ 
+  -- LEFT JOIN: all students even if no matching dept:
+  SELECT s.id, s.name, d.dept_name
+  FROM   student s
+  LEFT JOIN department d ON s.dept_id = d.dept_id;
+ 
+  -- RIGHT JOIN: all departments even if no students:
+  SELECT s.name, d.dept_name
+  FROM   student s
+  RIGHT JOIN department d ON s.dept_id = d.dept_id;
+ 
+  -- FULL OUTER JOIN: all rows from both tables:
+  SELECT s.name, d.dept_name
+  FROM   student s
+  FULL OUTER JOIN department d ON s.dept_id = d.dept_id;
+ 
+  -----------------------------------------------
+  Subquery -- nested SELECT
+  -----------------------------------------------
+ 
+  -- Students older than the average age:
+  SELECT name, age FROM student
+  WHERE  age > (SELECT AVG(age) FROM student);
+ 
+  -- Students in departments that exist:
+  SELECT name FROM student
+  WHERE  dept_id IN (SELECT dept_id FROM department);
+ 
+  ============================================================================
+  6C. UPDATE -- Modify existing rows
+  ============================================================================
+ 
+  WARNING: Always include WHERE. UPDATE without WHERE updates ALL rows.
+ 
+  -- Update one column for one row:
+  UPDATE student SET age = 21 WHERE id = 1;
+ 
+  -- Update multiple columns at once:
+  UPDATE student
+  SET    age = 22, email = 'ravi_new@mail.com'
+  WHERE  id = 1;
+ 
+  -- Update using calculation (10% salary raise):
+  UPDATE employee
+  SET    salary = salary * 1.10
+  WHERE  dept_id = 5;
+ 
+  -- Update using subquery:
+  UPDATE employee
+  SET    salary = (SELECT AVG(salary) FROM employee)
+  WHERE  emp_id = 101;
+ 
+  -- Save after update:
+  COMMIT;
+  -- Undo before committing:
+  ROLLBACK;
+ 
+  ============================================================================
+  6D. DELETE -- Remove specific rows
+  ============================================================================
+ 
+  WARNING: Always include WHERE. DELETE without WHERE removes ALL rows.
+           Unlike TRUNCATE, DELETE can be rolled back before COMMIT.
+ 
+  -- Delete one specific row:
+  DELETE FROM student WHERE id = 1;
+ 
+  -- Delete multiple rows:
+  DELETE FROM student WHERE age < 18;
+ 
+  -- Delete using subquery:
+  DELETE FROM student
+  WHERE  dept_id NOT IN (SELECT dept_id FROM department);
+ 
+  -- Delete all rows (but keep table structure -- rollback possible):
+  DELETE FROM student;
+ 
+  -- Save:
+  COMMIT;
+  -- Undo:
+  ROLLBACK;
+ 
+  ============================================================================
+  6E. MERGE -- Insert OR Update in one statement (Upsert)
+  ============================================================================
+ 
+  MERGE INTO student t
+  USING  student_backup s ON (t.id = s.id)
+  WHEN MATCHED THEN
+    UPDATE SET t.age = s.age, t.email = s.email
+  WHEN NOT MATCHED THEN
+    INSERT (id, name, age, email)
+    VALUES (s.id, s.name, s.age, s.email);
+ 
+  Logic:
+    Row exists in target?  YES --> UPDATE it
+    Row missing in target? NO  --> INSERT it
+ 
+================================================================================
+  STEP 7 -- TRANSACTION CONTROL  (TCL)
+================================================================================
+ 
+  DML changes live in memory until explicitly saved.
+  COMMIT  = save to disk permanently
+  ROLLBACK = erase from memory (undo)
+  SAVEPOINT = create a named checkpoint mid-transaction
+ 
+  ------------------------------------------------------------------------
+  7A. THE THREE CORE COMMANDS
+  ------------------------------------------------------------------------
+ 
+  COMMIT;                 -- saves ALL DML changes since last commit
+  ROLLBACK;               -- undoes ALL DML changes since last commit
+  SAVEPOINT sp1;          -- creates checkpoint named sp1
+  ROLLBACK TO sp1;        -- rolls back only to sp1, not full rollback
+  RELEASE SAVEPOINT sp1;  -- removes the savepoint (optional)
+ 
+  ------------------------------------------------------------------------
+  7B. FULL EXAMPLE WITH SAVEPOINTS
+  ------------------------------------------------------------------------
+ 
+  INSERT INTO student VALUES (10, 'Test1', 20, null);
+  SAVEPOINT after_first;
+ 
+  INSERT INTO student VALUES (11, 'Test2', 21, null);
+  SAVEPOINT after_second;
+ 
+  DELETE FROM student WHERE id = 10;
+  -- Oops! Wrong delete. Roll back only the delete:
+  ROLLBACK TO after_second;
+ 
+  -- Both inserts still exist. Delete was undone.
+  COMMIT;   -- saves Test1 and Test2 permanently.
+ 
+  ------------------------------------------------------------------------
+  7C. DDL vs DML -- AUTO-COMMIT RULE (CRITICAL)
+  ------------------------------------------------------------------------
+ 
+  DDL = auto-commits instantly, NO rollback possible:
+    CREATE TABLE test_tbl (id NUMBER);      -- auto-committed
+    DROP TABLE   test_tbl;                  -- auto-committed
+    ALTER TABLE  student ADD (col1 NUMBER); -- auto-committed
+    TRUNCATE TABLE student;                 -- auto-committed
+ 
+  DML = manual commit required:
+    INSERT INTO student ...;   -- NOT saved yet
+    UPDATE student ...;        -- NOT saved yet
+    DELETE FROM student ...;   -- NOT saved yet
+    COMMIT;                    -- NOW all three are permanently saved
+ 
+  ------------------------------------------------------------------------
+  7D. CHECK IF YOU HAVE OPEN UNCOMMITTED TRANSACTIONS
+  ------------------------------------------------------------------------
+ 
+  SELECT xidusn, xidslot, status, start_time
+  FROM   v$transaction;
+ 
+  -- If rows returned --> you have uncommitted DML in this session.
+  -- If no rows       --> nothing pending, all clean.
+ 
+================================================================================
+  QUICK REFERENCE: DATATYPE CHEAT SHEET
+================================================================================
+ 
+  Datatype          Use For                               Example
+  ----------------  ------------------------------------  ------------------
+  NUMBER(p,s)       Numbers  p=digits  s=decimal places   NUMBER(10,2)
+  VARCHAR2(n)       Variable text up to n characters      VARCHAR2(100)
+  CHAR(n)           Fixed-length text (pads with spaces)  CHAR(10)
+  DATE              Date + time (no milliseconds)         SYSDATE
+  TIMESTAMP         Date + time with sub-second precision SYSTIMESTAMP
+  CLOB              Large text up to 4GB                  Long descriptions
+  BLOB              Binary data up to 4GB                 Images, files
+ 
+  NOTE: Always use VARCHAR2 in Oracle -- never VARCHAR (deprecated).
+ 
+================================================================================
+  QUICK REFERENCE: CONSTRAINT CHEAT SHEET
+================================================================================
+ 
+  Constraint      What It Enforces
+  ------------    -------------------------------------------------------
+  PRIMARY KEY     Unique + Not Null. One per table. Main row identifier.
+  FOREIGN KEY     Must match a PRIMARY KEY in another table (referential).
+  UNIQUE          No duplicate values allowed. Nulls are permitted.
+  NOT NULL        Column must always have a value. Cannot be empty.
+  CHECK           Custom rule must be true. e.g. age > 0
+  DEFAULT         Auto-fills a value if none is provided on INSERT.
+ 
+================================================================================
+  QUICK REFERENCE: ALL COMMANDS SUMMARY TABLE
+================================================================================
+ 
+  Command      Type   What It Does                     Rollback?
+  ----------   ----   ------------------------------   ------------------
+  CREATE       DDL    Build new object                 NO  (auto-commits)
+  ALTER        DDL    Modify existing structure        NO  (auto-commits)
+  DROP         DDL    Delete object permanently        NO  (auto-commits)
+  TRUNCATE     DDL    Wipe all rows instantly          NO  (auto-commits)
+  RENAME       DDL    Rename an object                 NO  (auto-commits)
+  COMMENT      DDL    Add documentation                NO  (auto-commits)
+  INSERT       DML    Add new rows                     YES (until COMMIT)
+  SELECT       DML    Read data (read-only)            N/A
+  UPDATE       DML    Modify existing rows             YES (until COMMIT)
+  DELETE       DML    Remove specific rows             YES (until COMMIT)
+  MERGE        DML    Insert or Update (upsert)        YES (until COMMIT)
+  COMMIT       TCL    Save all DML to disk             N/A
+  ROLLBACK     TCL    Undo all DML since last COMMIT   N/A
+  SAVEPOINT    TCL    Create mid-transaction checkpoint N/A
+ 
+================================================================================
+  QUICK REFERENCE: SYSTEM VIEWS CHEAT SHEET
+================================================================================
+ 
+  View                  Access     Use For
+  ------------------    -------    -----------------------------------------
+  v$database            DBA        DB name, mode, platform
+  v$instance            DBA        Instance state, uptime, version
+  v$version             DBA        All component versions
+  v$session             DBA        Live connections and user activity
+  v$pdbs                DBA        All Pluggable Databases and their state
+  v$log                 DBA        Online redo log groups and status
+  v$logfile             DBA        Physical paths of redo log files
+  v$archived_log        DBA        History of archived logs
+  v$transaction         DBA        Open uncommitted transactions
+  v$diag_info           DBA        Path to alert log files on disk
+  dba_users             DBA        All users/schemas in the database
+  dba_tables            DBA        All tables across all schemas
+  dba_tab_columns       DBA        All columns across all tables
+  dba_constraints       DBA        All constraints across all tables
+  dba_indexes           DBA        All indexes across all tables
+  dba_role_privs        DBA        Roles granted to users
+  dba_sys_privs         DBA        System privileges of users
+  all_tables            Any user   Tables visible to current user
+  all_tab_columns       Any user   Columns visible to current user
+  user_tables           Any user   Tables owned by current user
+  user_tab_columns      Any user   Columns in your own tables
+  user_constraints      Any user   Constraints on your own tables
+  user_cons_columns     Any user   Columns in your constraints
+  user_indexes          Any user   Indexes on your own tables
+  user_ind_columns      Any user   Columns in your indexes
+  user_sequences        Any user   Sequences you own
+  user_views            Any user   Views you own
+  user_synonyms         Any user   Synonyms you own
+  user_tab_comments     Any user   Table comments
+  user_col_comments     Any user   Column comments
+  user_role_privs       Any user   Roles granted to you
+  user_sys_privs        Any user   Your system privileges
+  recyclebin            Any user   Dropped objects pending recovery
+ 
+================================================================================
+  COMMON ERRORS AND FIXES
+================================================================================
+ 
+  Error                  Cause                         Fix
+  --------------------   ---------------------------   ----------------------
+  ORA-01031              Insufficient privileges       GRANT CONNECT, RESOURCE
+  ORA-01045              No CREATE SESSION privilege   GRANT CONNECT
+  ORA-01950              No tablespace quota           GRANT UNLIMITED TABLESPACE
+  ORA-00942              Table or view does not exist  Check schema + table name
+  ORA-00904              Invalid column name           Check column spelling
+  ORA-00001              Unique constraint violated    Duplicate primary key
+  ORA-02292              Integrity constraint violated Delete child rows first
+  ORA-01017              Invalid username/password     Check credentials
+  ORA-12541              No listener                   Start Oracle listener
+  SP2-0158               Unknown SHOW option           Use SHOW USER not USERS
+ 
+================================================================================
+  PRO TIPS
+================================================================================
+ 
+  1. Always run SHOW CON_NAME and SHOW USER at the start of every session.
+ 
+  2. Always include WHERE in UPDATE and DELETE -- omitting it affects ALL rows.
+ 
+  3. Use VARCHAR2 not VARCHAR in Oracle -- VARCHAR is deprecated.
+ 
+  4. DDL auto-commits -- a CREATE or DROP inside a transaction will commit
+     all pending DML changes before it too.
+ 
+  5. After every DML batch: SELECT first to verify, then COMMIT.
+     Never commit blindly.
+ 
+  6. Two terminal workflow for daily work:
+     Terminal 1 --> SQL queries
+     Terminal 2 --> tail -f alert_XE.log (live error monitoring)
+ 
+  7. dba_ views need DBA role. If you get ORA-00942, use all_ or user_ instead.
+ 
+  8. Dropped tables go to recyclebin first -- check there before panicking.
+ 
+  9. TRUNCATE is faster than DELETE for wiping all rows but cannot be undone.
+ 
+ 10. MERGE is the cleanest way to sync two tables -- avoids INSERT + UPDATE pair.
+ 
+================================================================================
+              END OF NOTES  |  Oracle Database 21c XE  |  Kali Linux / Docker
+================================================================================
+ 
+

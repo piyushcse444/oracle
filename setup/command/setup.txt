@@ -1,0 +1,17 @@
+1. sudo apt update && sudo apt install -y docker.io
+2. sudo systemctl enable docker --now
+3. sudo docker run -d --name oracle19c -p 1521:1521 -p 5500:5500 -e ORACLE_PASSWORD='YourStrongPassword123!' gvenzl/oracle-xe
+4. sudo docker logs -f oracle19c
+5. -- sudo docker rm -f oracle19c
+6. sudo docker exec -it oracle19c sqlplus 'sys/YourStrongPassword123! as sysdba'
+
+1. CREATE USER c##test1 IDENTIFIED BY "test123!";
+2. GRANT CONNECT, RESOURCE, DBA TO C##test;
+3. SELECT username, account_status, created FROM dba_users WHERE oracle_maintained = 'N' ORDER BY created DESC;
+4. EXIT;
+
+7. sudo docker cp /home/kali/Desktop/Oracle/exercise/hr_conn.sql  oracle19c:/tmp/hr_conn.sql
+8.  sudo docker exec -it oracle19c sqlplus 'c##test1/"test123!"@localhost:1521/XEPDB1' @/tmp/hr_conn.sql
+9. sudo docker stop oracle19c
+10. sudo docker start oracle19c
+11. sudo docker exec -it oracle19c sqlplus 'c##test1/"test123!"@localhost:1521/XEPDB1'

@@ -20,14 +20,6 @@ STEP 1: UPDATE REPOSITORIES & INSTALL ENGINE
 Command:
 $ sudo apt update && sudo apt install -y docker.io
 
-Explanation:
-* "sudo"       : Elevates terminal security rights to install software packages.
-* "apt update" : Synchronizes your Kali system package indexing files with the 
-                 online servers to pull down latest security releases.
-* "install -y" : Downloads and automatically confirms the installation of the 
-                 Docker engine package without halting to ask for permission.
-
-
 STEP 2: ENERGIZE THE BACKGROUND CONTAINER DAEMON
 ------------------------------------------------
 Command:
@@ -108,19 +100,14 @@ Explanation:
 
 STEP 7: CODE STATEMENTS INSIDE THE INTERACTIVE SHELL (SQL> Prompt)
 ------------------------------------------------------------------
-Run these queries sequentially to create your assignment environment:
 
-1] ALTER SESSION SET "_ORACLE_SCRIPT"=true;
-   -> Why: Modern Oracle (CDB mode) blocks simple user creation by default. This 
-      tells the system to bypass naming locks for local assignment schemas.
-
-2] CREATE USER test IDENTIFIED BY "test@123";
-   -> Why: Creates an isolated schema workspace folder.
+1] CREATE USER C##TEST IDENTIFIED BY "test@123";
+   -> create a common user (C##TEST) that can access all pdb and cdb
    -> CRITICAL RULE: If a password contains a special character like '@', it MUST 
       be enclosed in Double Quotes (" ") inside SQL, otherwise Oracle fails with 
       syntax error ORA-00922.
 
-3] GRANT CONNECT, RESOURCE, DBA TO test;
+3] GRANT CONNECT, RESOURCE, DBA TO C## test;
    -> Why: Assigns operational privileges. CONNECT lets you log in, RESOURCE lets 
       you run DDL (CREATE TABLE), and DBA provides assignment flexibility.
 
@@ -141,19 +128,13 @@ STEP 8: FILE TRANSFUSION FROM KALI TO THE CONTAINERS FILESPACE
 Command:
 $ sudo docker cp /home/kali/Desktop/Oracle/exercise/setup_dummy_data.sql oracle19c:/tmp/setup_dummy_data.sql
 
-Explanation:
-* "cp" : Copy function wrapper. Copies your exercise script from your local 
-         Kali desktop storage path directly into the internal temporary folder 
-         (/tmp) inside the container sandbox environment.
-
-
 STEP 9: AUTOMATED HIGH-VELOCITY REPO EXTRACTION INTO THE PLUGGABLE SYSTEM
 -------------------------------------------------------------------------
 Command:
-$ sudo docker exec -it oracle19c sqlplus 'test/"test@123"@localhost:1521/XEPDB1' @/tmp/setup_dummy_data.sql
+$ sudo docker exec -it oracle19c sqlplus 'C##test/"test@123"@localhost:1521/XEPDB1' @/tmp/setup_dummy_data.sql
 
 Explanation:
-* 'test/"test@123"...' : Connects as your custom student account.
+* 'C##test/"test@123"...' : Connects as your custom student account.
 * "@localhost:1521/"   : Routes traffic natively through local machine ports.
 * "XEPDB1"             : THE MOST IMPORTANT PART. Connects you straight to the 
                          Pluggable Database. Connecting to "XE" will fail because 

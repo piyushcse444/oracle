@@ -1,0 +1,135 @@
+===============================================================================
+                    ORACLE SQL NOTES — PART 4
+               QUICK REFERENCE • ERRORS • PRO TIPS
+===============================================================================
+
+===============================================================================
+1. DATATYPE CHEAT SHEET
+===============================================================================
+
+NUMBER(p,s)  -> Numeric      Example: NUMBER(10,2)
+VARCHAR2(n)  -> Variable text
+CHAR(n)      -> Fixed text
+DATE         -> Date + time
+TIMESTAMP    -> Time + milliseconds
+CLOB         -> Large text
+BLOB         -> Binary data
+
+NOTE:
+Use VARCHAR2, not VARCHAR.
+
+===============================================================================
+2. CONSTRAINT CHEAT SHEET
+===============================================================================
+
+PRIMARY KEY -> Unique + Not Null
+FOREIGN KEY -> Matches another table PK
+UNIQUE      -> No duplicates
+NOT NULL    -> Value required
+CHECK       -> Rule validation
+DEFAULT     -> Auto-fill value
+
+===============================================================================
+3. COMMAND SUMMARY
+===============================================================================
+
+DDL
+---
+CREATE     -> Create object
+ALTER      -> Modify structure
+DROP       -> Delete object
+TRUNCATE   -> Remove all rows
+RENAME     -> Rename object
+COMMENT    -> Add docs
+
+DML
+---
+INSERT     -> Add rows
+SELECT     -> Read data
+UPDATE     -> Modify rows
+DELETE     -> Remove rows
+MERGE      -> Insert/Update
+
+TCL
+---
+COMMIT     -> Save
+ROLLBACK   -> Undo
+SAVEPOINT  -> Checkpoint
+
+===============================================================================
+4. SYSTEM VIEWS CHEAT SHEET
+===============================================================================
+
+v$database         -> DB info
+v$instance         -> Instance/version
+v$version          -> Components
+v$pdbs             -> PDB list
+v$transaction      -> Open transactions
+dba_users          -> All users
+dba_tables         -> All tables
+user_tables        -> Your tables
+user_tab_columns   -> Your columns
+user_constraints   -> Constraints
+user_indexes       -> Indexes
+user_sequences     -> Sequences
+user_views         -> Views
+recyclebin         -> Recover dropped objects
+
+===============================================================================
+5. COMMON ERRORS + FIXES
+===============================================================================
+
+ORA-01031 -> Insufficient privileges
+             Fix: GRANT CONNECT, RESOURCE
+
+ORA-01045 -> No CREATE SESSION
+             Fix: GRANT CONNECT
+
+ORA-01950 -> No quota
+             Fix: GRANT UNLIMITED TABLESPACE
+
+ORA-00942 -> Table/view missing
+             Fix: Check schema + table
+
+ORA-00904 -> Invalid column
+             Fix: Check spelling
+
+ORA-00001 -> Unique constraint violated
+             Fix: Duplicate key
+
+ORA-02292 -> Integrity constraint
+             Fix: Delete child rows first
+
+ORA-01017 -> Invalid login
+ORA-12541 -> No listener
+SP2-0158  -> Wrong SHOW syntax
+
+===============================================================================
+6. PRO TIPS
+===============================================================================
+
+1. Start every session:
+   SHOW CON_NAME;
+   SHOW USER;
+
+2. Always use WHERE with UPDATE / DELETE.
+
+3. DDL auto-commits.
+
+4. Verify with SELECT before COMMIT.
+
+5. Two-terminal workflow:
+   Terminal1 -> SQL
+   Terminal2 -> tail -f alert_XE.log
+
+6. Use user_ / all_ views if dba_ fails.
+
+7. Check recyclebin before panic.
+
+8. TRUNCATE faster than DELETE.
+
+9. MERGE = clean sync method.
+
+===============================================================================
+END — PART 4
+===============================================================================

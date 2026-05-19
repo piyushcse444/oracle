@@ -1,0 +1,211 @@
+===============================================================================
+                    ORACLE SQL NOTES — PART 1
+               DATABASE • USERS • TABLES • STRUCTURE
+===============================================================================
+
+LEARNING FLOW
+-------------
+1. Know Your Database       (V$ Views)
+2. Explore Schemas / Users  (DBA_USERS)
+3. Find Tables / Views
+4. Inspect Columns & Structure
+
+===============================================================================
+STEP 1 — KNOW YOUR DATABASE (SYS USER REQUIRED)
+===============================================================================
+
+1A. Database Name / Mode / Platform
+-----------------------------------
+SELECT name, open_mode, log_mode, platform_name FROM   v$database;
+
+NAME           -> Database name
+OPEN_MODE      -> READ WRITE | READ ONLY | MOUNTED
+LOG_MODE       -> ARCHIVELOG | NOARCHIVELOG
+PLATFORM_NAME  -> Host OS
+
+1B. Instance / Engine State
+---------------------------
+SELECT instance_name, host_name, version, startup_time, status FROM   v$instance;
+
+INSTANCE_NAME  -> SID / Instance
+HOST_NAME      -> Host system
+VERSION        -> Oracle version
+STARTUP_TIME   -> Last startup
+STATUS         -> OPEN | CLOSED | STARTED
+
+1C. Oracle Version Components
+-----------------------------
+SELECT banner FROM v$version;
+
+1D. Current Container (CDB / PDB)
+---------------------------------
+SHOW CON_NAME;
+SHOW USER;
+
+-- Switch PDB
+ALTER SESSION SET CONTAINER = XEPDB1;
+
+1E. List PDBs
+-------------
+SELECT con_id, name, open_mode, restricted, open_time FROM   v$pdbs;
+
+SELECT con_id, name, open_mode FROM   v$pdbs WHERE  con_id > 2;
+
+CON_ID  Meaning
+------  --------------------------------
+1       CDB$ROOT
+2       PDB$SEED
+3+      User PDB (ex: XEPDB1)
+
+NOTE:
+PDB must be READ WRITE before user login.
+
+===============================================================================
+STEP 2 — USERS / SCHEMAS
+===============================================================================
+
+In Oracle, every USER = SCHEMA.
+
+2A. List Users
+--------------
+SELECT username, account_status, created, default_tablespace FROM   dba_users ORDER BY created DESC;
+
+Account Status
+--------------
+OPEN              -> Login allowed
+EXPIRED           -> Password expired
+LOCKED            -> Account locked
+EXPIRED & LOCKED  -> Both
+
+2B. Your Own User
+-----------------
+SELECT username, account_status, default_tablespace FROM   user_users;
+
+2C. Roles Granted
+-----------------
+SELECT granted_role, admin_option FROM   dba_role_privs WHERE  grantee='PDB_ADMIN';
+
+2D. System Privileges
+---------------------
+SELECT privilege, admin_option FROM   dba_sys_privs WHERE  grantee='PDB_ADMIN';
+
+2E. Object Privileges
+---------------------
+SELECT privilege, table_name, owner FROM   dba_tab_privs WHERE  grantee='PDB_ADMIN';
+
+2F. Create User + Grants (Run as SYS)
+-------------------------------------
+ALTER SESSION SET CONTAINER = XEPDB1;
+
+CREATE USER pdb_admin IDENTIFIED BY Admin123;
+
+GRANT CONNECT              TO pdb_admin;
+GRANT RESOURCE             TO pdb_admin;
+GRANT UNLIMITED TABLESPACE TO pdb_admin;
+GRANT CREATE VIEW          TO pdb_admin;
+GRANT CREATE SYNONYM       TO pdb_admin;
+
+Useful Views
+------------
+dba_users        -> All users
+all_users        -> Visible users
+user_users       -> Your user info
+dba_role_privs   -> Roles
+dba_sys_privs    -> System privileges
+user_role_privs  -> Your roles
+
+===============================================================================
+STEP 3 — FIND TABLES / OBJECTS
+===============================================================================
+
+3A. Your Tables
+---------------
+SELECT table_name, num_rows, last_analyzed FROM   user_tables ORDER BY table_name;
+
+3B. All Tables
+--------------
+SELECT owner, table_name, num_rows FROM   dba_tables WHERE  owner NOT IN ('SYS','SYSTEM','XDB','CTXSYS','MDSYS') ORDER BY owner, table_name;
+
+3C. Search Table
+----------------
+SELECT table_name FROM   user_tables WHERE  table_name LIKE 'STU%';
+
+SELECT table_name FROM   user_tables WHERE  table_name LIKE '%BACK%';
+
+3D. Count Tables
+----------------
+SELECT COUNT(*) AS total_tables FROM   user_tables;
+
+3E. Views
+----------
+SELECT view_name FROM   user_views ORDER BY view_name;
+
+3F. Sequences
+-------------
+SELECT sequence_name,last_number,increment_by,max_value FROM   user_sequences;
+
+3G. Indexes
+-----------
+SELECT index_name, table_name, uniqueness, status FROM   user_indexes ORDER BY table_name;
+
+===============================================================================
+STEP 4 — TABLE STRUCTURE / COLUMNS
+===============================================================================
+
+4A. Quick Structure
+-------------------
+DESC student;
+DESCRIBE student;
+
+4B. Full Column Details
+-----------------------
+SELECT column_name, data_type, data_length, data_precision,
+       nullable, data_default, column_id
+FROM   user_tab_columns
+WHERE  table_name='STUDENT'
+ORDER BY column_id;
+
+nullable     -> Y / N
+column_id    -> Column order
+data_default -> Default value
+
+4C. Constraints
+---------------
+SELECT constraint_name, constraint_type, search_condition, status
+FROM   user_constraints
+WHERE  table_name='STUDENT';
+
+P -> PRIMARY KEY
+U -> UNIQUE
+R -> FOREIGN KEY
+C -> CHECK / NOT NULL
+
+4D. Constraint Columns
+----------------------
+SELECT constraint_name, column_name, position
+FROM   user_cons_columns
+WHERE  table_name='STUDENT'
+ORDER BY constraint_name, position;
+
+4E. Index Columns
+-----------------
+SELECT i.index_name, i.uniqueness,
+       c.column_name, c.column_position
+FROM   user_indexes i
+JOIN   user_ind_columns c
+ON     i.index_name=c.index_name
+WHERE  i.table_name='STUDENT';
+
+4F. Comments
+------------
+SELECT comments
+FROM   user_tab_comments
+WHERE  table_name='STUDENT';
+
+SELECT column_name, comments
+FROM   user_col_comments
+WHERE  table_name='STUDENT';
+
+===============================================================================
+END — PART 1
+===============================================================================

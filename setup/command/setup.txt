@@ -5,6 +5,10 @@
 5. -- sudo docker rm -f oracle19c
 6. sudo docker exec -it oracle19c sqlplus 'sys/YourStrongPassword123! as sysdba'
 
+**** we can create a cdb specific user*****
+1.ALTER SESSION SET "_ORACLE_SCRIPT"=true;
+2.CREATE USER test IDENTIFIED BY pass;
+
 1. CREATE USER c##test1 IDENTIFIED BY "test123!";
 2. GRANT CONNECT, RESOURCE, DBA TO C##test;
 3. SELECT username, account_status, created FROM dba_users WHERE oracle_maintained = 'N' ORDER BY created DESC;

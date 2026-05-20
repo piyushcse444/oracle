@@ -101,6 +101,11 @@ Explanation:
 STEP 7: CODE STATEMENTS INSIDE THE INTERACTIVE SHELL (SQL> Prompt)
 ------------------------------------------------------------------
 
+**** we can create a cdb specific user*****
+1.ALTER SESSION SET "_ORACLE_SCRIPT"=true;
+2.CREATE USER test IDENTIFIED BY pass;
+
+
 1] CREATE USER C##TEST IDENTIFIED BY "test@123";
    -> create a common user (C##TEST) that can access all pdb and cdb
    -> CRITICAL RULE: If a password contains a special character like '@', it MUST 

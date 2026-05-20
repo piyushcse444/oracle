@@ -1,0 +1,113 @@
+I. Start at the CDB (as SYS or a privileged user)
+
+	0. show current container and user
+		show con_name;
+		show user;
+		
+	1. Show basic container info
+		-- Show CDB name, ID, root container
+		i) SELECT name, cdb, dbid, created FROM v$database;
+
+		-- Show all containers (CDB$ROOT + PDBs)
+		ii) SELECT con_id, name, open_mode, restricted FROM v$containers;
+
+		-- Alternative for PDB status
+		iii) SELECT pdb_id, pdb_name, status FROM dba_pdbs;
+		
+	2. Show users in CDB$ROOT
+		-- All common users (prefix C##) in the CDB root
+		i) SELECT username, user_id, account_status, default_tablespace, temporary_tablespace
+			FROM dba_users
+			WHERE common='YES';
+
+		-- Local users in root	
+		ii) SELECT username, user_id, account_status
+			FROM dba_users
+			WHERE common='NO';	
+
+	3. Show roles and grants in root
+		-- Roles
+		i) SELECT * FROM dba_roles;
+
+		-- Role grants
+		ii) SELECT * FROM dba_role_privs;
+
+		-- System/privilege grants
+		iii) SELECT * FROM dba_sys_privs;
+			
+	4. Show tablespaces and storage
+		-- All tablespaces
+		i) SELECT tablespace_name, status, contents, extent_management FROM dba_tablespaces;
+
+		-- Datafiles info
+		ii) SELECT file_name, tablespace_name, bytes/1024/1024 AS size_mb, autoextensible FROM 
+				dba_data_files;		
+				
+	5. Show CDB-wide system info / parameters
+		-- Initialization parameters
+		i) SHOW PARAMETER;
+
+		-- Version info
+		ii) SELECT * FROM v$version;
+
+		-- Instance info
+		iii) SELECT instance_name, host_name, version, startup_time FROM v$instance;
+
+		-- Alert log location
+		iv) SHOW PARAMETER background_dump_dest;
+		
+	6. how active sessions and processes
+		-- Current sessions
+		i) SELECT sid, serial#, username, status, osuser, machine FROM v$session;
+
+		-- Active transactions
+		ii) SELECT * FROM v$transaction;	
+		
+	7. Show redo logs, archive logs
+		-- Redo logs
+		i) SELECT group#, thread#, bytes/1024/1024 AS size_mb, members, status FROM v$log;
+
+		-- Archived redo logs
+		ii) SELECT name, sequence#, first_time, next_time FROM v$archived_log ORDER BY
+			 sequence#;
+		
+	8. Show database links
+		i) SELECT db_link, username, host FROM dba_db_links;	
+		
+	9. Show jobs, scheduler, and alerts
+		-- Scheduler jobs
+		i) SELECT job_name, enabled, state, last_start_date FROM dba_scheduler_jobs;
+
+		-- Alert log info (readable from UTL_FILE or OS)
+		-- Check directory parameter for location	
+		
+
+II. Discover PDBs from CDB without switching
+	-- List PDBs and status
+	1) SELECT pdb_id, pdb_name, status, con_id FROM dba_pdbs;
+
+	-- PDB creation time
+	2) SELECT pdb_name, created FROM dba_pdbs;
+
+	-- Who owns PDBs
+	3) SELECT pdb_name, cdb_users_count FROM dba_pdbs;
+
+	*** Tip: You cannot see PDB tables from CDB root, but you can see: ***
+
+	-- All users in all containers (with container_id)
+	4) SELECT con_id, username, account_status FROM cdb_users;
+
+	-- Roles in all containers
+	5) SELECT con_id, granted_role, grantee FROM cdb_role_privs;
+
+	-- System privileges in all containers
+	6) SELECT con_id, grantee, privilege FROM cdb_sys_privs;
+
+	-- Object info (tables, views) in all containers
+	7) SELECT owner, object_name, object_type, con_id FROM cdb_objects WHERE object_type='TABLE';
+							
+				
+✅ Summary of Discovery Order
+	CDB Level
+	Containers, CDB info, users, roles, grants, tablespaces, datafiles, logs, sessions, redo/archive 
+		logs, DB links, jobs.
